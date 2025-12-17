@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QuickBox - Wireframe Mockup Tool</title>
+  <link href="https://fonts.googleapis.com/css2?family=Architects+Daughter&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <div id="app">
+    <!-- Toolbar -->
+    <div id="toolbar">
+      <div class="toolbar-section branding">
+        <img src="media/IIC Logo small.png" alt="IIC Logo" class="logo">
+        <div class="branding-text">
+          <span class="app-title">QuickBox v0.2.1</span>
+          <span class="copyright">© 2025 Intelliscape Interactive Corp.</span>
+        </div>
+      </div>
+
+      <div class="toolbar-section">
+        <button id="newBtn" title="New File">New</button>
+        <button id="openBtn" title="Open File">Open</button>
+        <button id="saveBtn" title="Save File">Save</button>
+      </div>
+
+      <div class="toolbar-section">
+        <button id="addTextBtn" title="Add Text Box">+ Text</button>
+        <button id="addImageBtn" title="Add Image Box">+ Image</button>
+        <button id="addMenuBtn" title="Add Menu Box">+ Menu</button>
+        <button id="deleteBtn" title="Delete Selected">Delete</button>
+      </div>
+
+      <div class="toolbar-section">
+        <label>Font:</label>
+        <select id="fontSelect">
+          <option value="'Architects Daughter', cursive">Architects Daughter</option>
+          <option value="'Comic Sans MS', cursive">Comic Sans</option>
+          <option value="Arial, sans-serif">Arial</option>
+          <option value="'Courier New', monospace">Courier</option>
+          <option value="Georgia, serif">Georgia</option>
+        </select>
+
+        <label>Size:</label>
+        <select id="fontSizeSelect">
+          <option value="12">12</option>
+          <option value="14">14</option>
+          <option value="16" selected>16</option>
+          <option value="18">18</option>
+          <option value="20">20</option>
+          <option value="24">24</option>
+          <option value="28">28</option>
+          <option value="32">32</option>
+        </select>
+      </div>
+
+      <div class="toolbar-section">
+        <label>Canvas:</label>
+        <button id="desktopBtn" class="canvas-size-btn active" title="Desktop (1200px)">Desktop</button>
+        <button id="tabletBtn" class="canvas-size-btn" title="Tablet (768px)">Tablet</button>
+        <button id="mobileBtn" class="canvas-size-btn" title="Mobile (375px)">Mobile</button>
+      </div>
+    </div>
+
+    <!-- Main Content Area -->
+    <div id="mainContent">
+      <!-- Navigator Panel -->
+      <div id="navigatorPanel">
+        <!-- Pages Section -->
+        <div class="nav-section">
+          <div class="nav-section-header">
+            <h3>Pages</h3>
+            <button id="addPageBtn" title="Add New Page">+</button>
+          </div>
+          <div id="pagesList"></div>
+        </div>
+
+        <!-- Elements Section -->
+        <div class="nav-section">
+          <h3>Elements</h3>
+          <div id="elementsList"></div>
+        </div>
+      </div>
+
+      <!-- Canvas -->
+      <div id="canvasContainer">
+        <div id="canvas"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Hidden file input for images -->
+  <input type="file" id="imageInput" accept="image/*" style="display: none;">
+
+  <!-- Hidden file input for opening files -->
+  <input type="file" id="fileInput" accept=".json" style="display: none;">
+
+  <script src="app.js"></script>
+</body>
+</html>
