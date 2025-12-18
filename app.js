@@ -35,6 +35,12 @@ const elementsList = document.getElementById('elementsList');
 const pagesList = document.getElementById('pagesList');
 const imageInput = document.getElementById('imageInput');
 const fileInput = document.getElementById('fileInput');
+const menuEditorPanel = document.getElementById('menuEditorPanel');
+const menuItemsList = document.getElementById('menuItemsList');
+const addMenuItemBtn = document.getElementById('addMenuItemBtn');
+const addChildMenuItemBtn = document.getElementById('addChildMenuItemBtn');
+const saveMenuBtn = document.getElementById('saveMenuBtn');
+const closeMenuEditorBtn = document.getElementById('closeMenuEditorBtn');
 
 // Toolbar buttons
 const newBtn = document.getElementById('newBtn');
@@ -70,6 +76,12 @@ mobileBtn.addEventListener('click', () => setCanvasSize('mobile'));
 addPageBtn.addEventListener('click', addPage);
 fileInput.addEventListener('change', openFile);
 imageInput.addEventListener('change', handleImageUpload);
+
+// Menu Editor Event Listeners
+addMenuItemBtn.addEventListener('click', addMenuItem);
+addChildMenuItemBtn.addEventListener('click', addChildMenuItem);
+saveMenuBtn.addEventListener('click', saveMenu);
+closeMenuEditorBtn.addEventListener('click', closeMenuEditor);
 
 // Canvas click to deselect
 canvas.addEventListener('click', (e) => {
@@ -124,9 +136,24 @@ function addBox(type) {
   if (type === 'menu') {
     box.orientation = 'horizontal';
     box.menuItems = [
-      { text: 'Home', linkTo: null },
-      { text: 'About', linkTo: null },
-      { text: 'Contact', linkTo: null }
+      { 
+        id: `menu-item-${Date.now()}-0`, 
+        text: 'Home', 
+        linkTo: null,
+        children: []
+      },
+      { 
+        id: `menu-item-${Date.now()}-1`, 
+        text: 'About', 
+        linkTo: null,
+        children: []
+      },
+      { 
+        id: `menu-item-${Date.now()}-2`, 
+        text: 'Contact', 
+        linkTo: null,
+        children: []
+      }
     ];
   }
 
@@ -139,7 +166,7 @@ function addBox(type) {
 // Render Box
 function renderBox(box) {
   const boxEl = document.createElement('div');
-  boxEl.className = 'box';
+  boxEl.className = 'box' + (box.type === 'menu' ? ' menu-box' : '');
   boxEl.id = box.id;
   boxEl.style.left = box.x + 'px';
   boxEl.style.top = box.y + 'px';
@@ -171,6 +198,30 @@ function renderBox(box) {
   } else if (box.type === 'menu') {
     content.contentEditable = false;
     renderMenuContent(content, box);
+
+    // Add drag icon for menu boxes
+    const dragIcon = document.createElement('div');
+    dragIcon.className = 'menu-drag-icon';
+    dragIcon.textContent = '☰';
+    dragIcon.title = 'Drag Menu';
+    dragIcon.addEventListener('mousedown', (e) => {
+      e.stopPropagation(); // Prevent other handlers
+      selectBox(box);
+      startDrag(e, box);
+    });
+
+    // Add edit icon for menu boxes
+    const editIcon = document.createElement('div');
+    editIcon.className = 'menu-edit-icon';
+    editIcon.textContent = '✏️';
+    editIcon.title = 'Edit Menu';
+    editIcon.addEventListener('click', (e) => {
+      e.stopPropagation(); // Prevent box selection
+      openMenuEditor(box);
+    });
+
+    boxEl.appendChild(dragIcon);
+    boxEl.appendChild(editIcon);
   }
 
   // Resize handles
@@ -187,11 +238,27 @@ function renderBox(box) {
 
   // Event listeners
   boxEl.addEventListener('mousedown', (e) => {
-    if (!e.target.classList.contains('resize-handle') && e.target.classList.contains('box')) {
+    // For menu boxes, only allow selection (no dragging from box area)
+    if (box.type === 'menu') {
+      // Ignore clicks on menu items, icons, and handles
+      const isMenuItemClick = e.target.closest('.menu-item') || e.target.closest('.menu-item-container');
+      const isIconClick = e.target.closest('.menu-edit-icon') || e.target.closest('.menu-drag-icon');
+      const isHandleClick = e.target.classList.contains('resize-handle');
+
+      if (isMenuItemClick || isIconClick || isHandleClick) {
+        return; // Let these elements handle their own events
+      }
+
+      // Only select the box when clicking on the background area
       selectBox(box);
-      startDrag(e, box);
-    } else if (!e.target.classList.contains('resize-handle')) {
-      selectBox(box);
+    } else {
+      // Normal box behavior for non-menu boxes
+      if (!e.target.classList.contains('resize-handle') && e.target.classList.contains('box')) {
+        selectBox(box);
+        startDrag(e, box);
+      } else if (!e.target.classList.contains('resize-handle')) {
+        selectBox(box);
+      }
     }
   });
 
@@ -237,13 +304,124 @@ function renderMenuContent(content, box) {
   content.style.justifyContent = 'space-around';
 
   box.menuItems.forEach(item => {
+    const menuItemContainer = document.createElement('div');
+    menuItemContainer.className = 'menu-item-container';
+    menuItemContainer.style.position = 'relative';
+    menuItemContainer.style.zIndex = '5';
+
     const menuItem = document.createElement('div');
     menuItem.className = 'menu-item';
     menuItem.textContent = item.text;
+    
     if (item.linkTo) {
       menuItem.classList.add('menu-item-linked');
     }
-    content.appendChild(menuItem);
+    
+    if (item.children.length > 0) {
+      menuItem.classList.add('has-children');
+      menuItem.textContent += ' ▼';
+      
+      // Create dropdown container
+      const dropdown = document.createElement('div');
+      dropdown.className = 'menu-dropdown';
+      dropdown.style.position = 'absolute';
+      dropdown.style.top = '100%';
+      dropdown.style.left = '0';
+      dropdown.style.background = '#fff';
+      dropdown.style.border = '2px solid #333';
+      dropdown.style.padding = '8px';
+      dropdown.style.zIndex = '100';
+      dropdown.style.display = 'none';
+      dropdown.style.minWidth = '150px';
+      
+      // Add child items to dropdown
+      item.children.forEach(child => {
+        const childItem = document.createElement('div');
+        childItem.className = 'menu-item child-menu-item';
+        childItem.textContent = child.text;
+        if (child.linkTo) {
+          childItem.classList.add('menu-item-linked');
+        }
+        
+        // Add click handler for child item navigation
+        if (child.linkTo) {
+          childItem.style.cursor = 'pointer';
+          childItem.addEventListener('click', (e) => {
+            e.stopPropagation();
+            handleLinkClick(child.linkTo);
+          });
+        } else {
+          // Even non-linked child items should prevent box selection
+          childItem.addEventListener('click', (e) => {
+            e.stopPropagation();
+          });
+        }
+
+        // Prevent box dragging on mousedown
+        childItem.addEventListener('mousedown', (e) => {
+          e.stopPropagation();
+        });
+        
+        dropdown.appendChild(childItem);
+      });
+      
+      menuItemContainer.appendChild(dropdown);
+      
+      // Show dropdown on hover
+      menuItem.addEventListener('mouseenter', () => {
+        dropdown.style.display = 'block';
+      });
+      
+      menuItem.addEventListener('mouseleave', (e) => {
+        // Use setTimeout to allow moving to dropdown
+        setTimeout(() => {
+          if (!dropdown.matches(':hover')) {
+            dropdown.style.display = 'none';
+          }
+        }, 200);
+      });
+      
+      dropdown.addEventListener('mouseleave', () => {
+        dropdown.style.display = 'none';
+      });
+    }
+    
+    menuItemContainer.appendChild(menuItem);
+    content.appendChild(menuItemContainer);
+    
+    // Add mousedown and click handlers for navigation
+    if (item.linkTo) {
+      menuItem.style.cursor = 'pointer';
+      menuItem.addEventListener('mousedown', (e) => {
+        e.stopPropagation(); // Prevent box selection/dragging
+      });
+      menuItem.addEventListener('click', (e) => {
+        e.stopPropagation(); // Prevent box selection
+        handleLinkClick(item.linkTo);
+      });
+    } else {
+      // For non-linked items, still prevent box selection to allow future linking
+      menuItem.addEventListener('mousedown', (e) => {
+        e.stopPropagation(); // Prevent box selection/dragging
+      });
+      menuItem.addEventListener('click', (e) => {
+        e.stopPropagation(); // Prevent box selection
+      });
+    }
+
+    // Also add mousedown and click handlers to the container for better click area
+    menuItemContainer.addEventListener('mousedown', (e) => {
+      e.stopPropagation(); // Prevent box selection/dragging
+    });
+
+    menuItemContainer.addEventListener('click', (e) => {
+      if (item.linkTo) {
+        e.stopPropagation();
+        handleLinkClick(item.linkTo);
+      } else {
+        e.stopPropagation(); // Prevent box selection
+      }
+    });
   });
 }
 
@@ -268,6 +446,262 @@ function selectBox(box) {
     // Highlight in elements list
     const listItem = document.querySelector(`[data-box-id="${box.id}"]`);
     if (listItem) listItem.classList.add('selected');
+
+    // Note: Menu editor is now opened via edit icon, not automatic selection
+    closeMenuEditor();
+  } else {
+    closeMenuEditor();
+  }
+}
+
+// Menu Editor Functions
+let currentEditingMenu = null;
+
+function openMenuEditor(box) {
+  if (box.type !== 'menu') return;
+  
+  currentEditingMenu = box;
+  menuEditorPanel.classList.remove('hidden');
+  renderMenuEditor();
+}
+
+function closeMenuEditor() {
+  menuEditorPanel.classList.add('hidden');
+  currentEditingMenu = null;
+}
+
+function renderMenuEditor() {
+  if (!currentEditingMenu) return;
+  
+  menuItemsList.innerHTML = '';
+  renderMenuItems(currentEditingMenu.menuItems, menuItemsList, 0);
+}
+
+function renderMenuItems(items, container, depth = 0) {
+  items.forEach((item, index) => {
+    const itemEl = document.createElement('div');
+    itemEl.className = 'menu-item-editor' + (item.children.length > 0 ? ' has-children' : '');
+    itemEl.dataset.itemId = item.id;
+    itemEl.dataset.index = index;
+    itemEl.dataset.depth = depth;
+    
+    const handle = document.createElement('span');
+    handle.className = 'menu-item-handle';
+    handle.textContent = '☰';
+    handle.draggable = true;
+    handle.addEventListener('dragstart', (e) => startMenuItemDrag(e, item.id));
+    
+    const input = document.createElement('input');
+    input.className = 'menu-item-input';
+    input.value = item.text;
+    input.addEventListener('change', (e) => updateMenuItemText(item.id, e.target.value));
+    
+    const controls = document.createElement('div');
+    controls.className = 'menu-item-controls';
+    
+    const addChildBtn = document.createElement('button');
+    addChildBtn.textContent = 'Add Child';
+    addChildBtn.addEventListener('click', () => addChildMenuItemTo(item.id));
+    
+    const deleteBtn = document.createElement('button');
+    deleteBtn.textContent = 'Delete';
+    deleteBtn.addEventListener('click', () => deleteMenuItem(item.id));
+    
+    const linkBtn = document.createElement('button');
+    linkBtn.textContent = item.linkTo ? 'Edit Link' : 'Add Link';
+    linkBtn.addEventListener('click', () => showMenuItemLinkDialog(item));
+    
+    controls.appendChild(addChildBtn);
+    controls.appendChild(deleteBtn);
+    controls.appendChild(linkBtn);
+    
+    itemEl.appendChild(handle);
+    itemEl.appendChild(input);
+    itemEl.appendChild(controls);
+    
+    container.appendChild(itemEl);
+    
+    // Render child items
+    if (item.children.length > 0) {
+      const childContainer = document.createElement('div');
+      childContainer.className = 'child-menu-items';
+      renderMenuItems(item.children, childContainer, depth + 1);
+      container.appendChild(childContainer);
+    }
+  });
+}
+
+function addMenuItem() {
+  if (!currentEditingMenu) return;
+  
+  const newItem = {
+    id: `menu-item-${Date.now()}-${currentEditingMenu.menuItems.length}`,
+    text: 'New Item',
+    linkTo: null,
+    children: []
+  };
+  
+  currentEditingMenu.menuItems.push(newItem);
+  renderMenuEditor();
+}
+
+function addChildMenuItem() {
+  // This will be handled by the "Add Child" button on specific items
+  alert('Please select a specific menu item to add a child to.');
+}
+
+function addChildMenuItemTo(parentId) {
+  if (!currentEditingMenu) return;
+  
+  const parentItem = findMenuItemById(currentEditingMenu.menuItems, parentId);
+  if (!parentItem) return;
+  
+  const newChild = {
+    id: `menu-item-${Date.now()}-child`,
+    text: 'New Child',
+    linkTo: null,
+    children: []
+  };
+  
+  parentItem.children.push(newChild);
+  renderMenuEditor();
+}
+
+function findMenuItemById(items, itemId) {
+  for (const item of items) {
+    if (item.id === itemId) return item;
+    const foundInChildren = findMenuItemById(item.children, itemId);
+    if (foundInChildren) return foundInChildren;
+  }
+  return null;
+}
+
+function updateMenuItemText(itemId, newText) {
+  if (!currentEditingMenu) return;
+  
+  const item = findMenuItemById(currentEditingMenu.menuItems, itemId);
+  if (item) {
+    item.text = newText;
+  }
+}
+
+function deleteMenuItem(itemId) {
+  if (!currentEditingMenu) return;
+  
+  if (!confirm('Delete this menu item?')) return;
+  
+  const result = removeMenuItemById(currentEditingMenu.menuItems, itemId);
+  if (result) {
+    currentEditingMenu.menuItems = result;
+    renderMenuEditor();
+  }
+}
+
+function removeMenuItemById(items, itemId) {
+  return items.filter(item => {
+    if (item.id === itemId) return false;
+    if (item.children.length > 0) {
+      item.children = removeMenuItemById(item.children, itemId);
+    }
+    return true;
+  });
+}
+
+function showMenuItemLinkDialog(item) {
+  if (!currentEditingMenu) return;
+  
+  const currentPage = getCurrentPage();
+  if (!currentPage) return;
+  
+  const pageList = state.pages.map(p => `${p.name} (${p.id})`).join('\n');
+  const targetPage = prompt(`Link to page:\n\n${pageList}\n\nEnter page ID or leave blank to remove link:`, 
+    item.linkTo ? item.linkTo.target : '');
+  
+  if (targetPage === null) return;
+  
+  if (targetPage === '') {
+    item.linkTo = null;
+  } else {
+    const page = state.pages.find(p => p.id === targetPage);
+    if (page) {
+      item.linkTo = { type: 'page', target: targetPage };
+    } else {
+      alert('Page not found');
+    }
+  }
+  
+  renderMenuEditor();
+}
+
+function saveMenu() {
+  if (!currentEditingMenu) return;
+
+  // Update the menu box rendering
+  const boxEl = document.getElementById(currentEditingMenu.id);
+  if (boxEl) {
+    const content = boxEl.querySelector('.box-content');
+    renderMenuContent(content, currentEditingMenu);
+  }
+
+  alert('Menu saved successfully!');
+}
+
+// Drag and drop for menu items
+function startMenuItemDrag(e, itemId) {
+  e.dataTransfer.setData('text/plain', itemId);
+  e.dataTransfer.effectAllowed = 'move';
+}
+
+// Add event listeners for drop
+menuItemsList.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+});
+
+menuItemsList.addEventListener('drop', (e) => {
+  e.preventDefault();
+  const itemId = e.dataTransfer.getData('text/plain');
+  const targetEl = e.target.closest('.menu-item-editor');
+  
+  if (itemId && targetEl) {
+    moveMenuItem(itemId, targetEl.dataset.itemId);
+  }
+});
+
+function moveMenuItem(itemId, targetItemId) {
+  if (!currentEditingMenu || itemId === targetItemId) return;
+  
+  // Find the items
+  let itemToMove = null;
+  let itemToMoveParent = null;
+  let targetItem = null;
+  let targetItemParent = null;
+  
+  // This is a simplified approach - in a real implementation, you'd need to handle
+  // finding the parent containers and managing the hierarchy properly
+  
+  const findItemAndParent = (items, itemId) => {
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].id === itemId) {
+        return { item: items[i], parent: items, index: i };
+      }
+      const foundInChildren = findItemAndParent(items[i].children, itemId);
+      if (foundInChildren) return foundInChildren;
+    }
+    return null;
+  };
+  
+  const source = findItemAndParent(currentEditingMenu.menuItems, itemId);
+  const target = findItemAndParent(currentEditingMenu.menuItems, targetItemId);
+  
+  if (source && target) {
+    // Remove from source
+    source.parent.splice(source.index, 1);
+    
+    // Add to target (after the target item)
+    target.parent.splice(target.index + 1, 0, source.item);
+    
+    renderMenuEditor();
   }
 }
 
@@ -388,7 +822,7 @@ function updatePagesList() {
     item.className = 'page-item';
     item.textContent = page.name;
     item.dataset.pageId = page.id;
-    item.title = 'Double click to rename';
+    item.title = 'Right-click to rename';
 
     if (page.id === state.currentPageId) {
       item.classList.add('active');
@@ -398,7 +832,8 @@ function updatePagesList() {
       switchToPage(page.id);
     });
 
-    item.addEventListener('dblclick', () => {
+    item.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
       editPageName(page);
     });
 
@@ -431,7 +866,7 @@ function updateElementsList() {
     item.className = 'element-item';
     item.textContent = box.name;
     item.dataset.boxId = box.id;
-    item.title = 'Double click to rename';
+    item.title = 'Right-click to rename';
 
     if (state.selectedBox && state.selectedBox.id === box.id) {
       item.classList.add('selected');
@@ -442,7 +877,8 @@ function updateElementsList() {
       selectBox(boxToSelect);
     });
 
-    item.addEventListener('dblclick', () => {
+    item.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
       editElementName(box);
     });
 
@@ -807,11 +1243,14 @@ canvas.addEventListener('click', (e) => {
   const box = e.target.closest('.box');
   if (box) {
     const boxId = box.id;
-    const boxData = state.boxes.find(b => b.id === boxId);
-    if (boxData && boxData.type === 'image') {
-      const content = e.target.closest('.box-content');
-      if (content && !content.querySelector('img')) {
-        imageInput.click();
+    const currentPage = getCurrentPage();
+    if (currentPage) {
+      const boxData = currentPage.boxes.find(b => b.id === boxId);
+      if (boxData && boxData.type === 'image') {
+        const content = e.target.closest('.box-content');
+        if (content && !content.querySelector('img')) {
+          imageInput.click();
+        }
       }
     }
   }

@@ -1,4 +1,4 @@
-QuickBox as built v0.2.1
+QuickBox as built v0.3
 
 ## Status: COMPLETED
 
@@ -96,7 +96,7 @@ file operations
 
 branding
 - IIC logo (media/IIC Logo small.png)
-- app title: QuickBox v0.2.1
+- app title: QuickBox v0.3
 - copyright: 2025 Intelliscape Interactive Corp.
 - logo and text in toolbar
 

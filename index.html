@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>QuickBox - Wireframe Mockup Tool</title>
+  <title>QuickBox v0.3 - Wireframe Mockup Tool</title>
   <link href="https://fonts.googleapis.com/css2?family=Architects+Daughter&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 </head>
@@ -15,7 +15,7 @@
       <div class="toolbar-section branding">
         <img src="media/IIC Logo small.png" alt="IIC Logo" class="logo">
         <div class="branding-text">
-          <span class="app-title">QuickBox v0.2.1</span>
+          <span class="app-title">QuickBox v0.3</span>
           <span class="copyright">© 2025 Intelliscape Interactive Corp.</span>
         </div>
       </div>
@@ -88,6 +88,22 @@
       <div id="canvasContainer">
         <div id="canvas"></div>
       </div>
+    </div>
+  </div>
+
+  <!-- Menu Editing Panel -->
+  <div id="menuEditorPanel" class="hidden">
+    <div class="menu-editor-header">
+      <h3>Menu Editor</h3>
+      <button id="closeMenuEditorBtn">Close</button>
+    </div>
+    <div class="menu-editor-content">
+      <div class="menu-editor-controls">
+        <button id="addMenuItemBtn">Add Menu Item</button>
+        <button id="addChildMenuItemBtn">Add Child Item</button>
+        <button id="saveMenuBtn">Save Menu</button>
+      </div>
+      <div id="menuItemsList" class="menu-items-list"></div>
     </div>
   </div>
 

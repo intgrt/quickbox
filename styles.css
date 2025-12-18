@@ -224,6 +224,8 @@ label {
   min-height: 50px;
 }
 
+
+
 .box.selected {
   border: 3px solid #333;
   box-shadow: 3px 3px 0 rgba(0,0,0,0.5);
@@ -264,7 +266,18 @@ label {
 }
 
 .box:hover .resize-handle,
-.box.resizing .resize-handle {
+.box.resizing .resize-handle,
+.box.selected .resize-handle {
+  display: block;
+}
+
+/* Menu boxes should only show resize handles when selected, not on hover */
+.menu-box:hover .resize-handle {
+  display: none;
+}
+
+.menu-box.selected .resize-handle,
+.menu-box.resizing .resize-handle {
   display: block;
 }
 
@@ -285,6 +298,51 @@ label {
   right: 4px;
   font-size: 12px;
   pointer-events: none;
+}
+
+/* Menu Drag Icon */
+.menu-drag-icon {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 2px solid #333;
+  border-radius: 3px;
+  padding: 2px 6px;
+  font-size: 14px;
+  cursor: move;
+  z-index: 10;
+  user-select: none;
+  box-shadow: 1px 1px 0 rgba(0, 0, 0, 0.2);
+}
+
+.menu-drag-icon:hover {
+  background: rgba(230, 230, 230, 0.9);
+  transform: scale(1.05);
+}
+
+/* Menu Edit Icon */
+.menu-edit-icon {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  background: #333;
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  cursor: pointer;
+  z-index: 10;
+  user-select: none;
+}
+
+.menu-edit-icon:hover {
+  background: #555;
+  transform: scale(1.1);
 }
 
 .box.has-link {
@@ -316,9 +374,133 @@ label {
   background: #f0f0f0;
 }
 
+/* Menu Editor Panel */
+#menuEditorPanel {
+  position: fixed;
+  top: 100px;
+  right: 20px;
+  width: 400px;
+  background: #fff;
+  border: 2px solid #333;
+  box-shadow: 4px 4px 0 #333;
+  z-index: 1000;
+  padding: 16px;
+  box-sizing: border-box;
+}
+
+#menuEditorPanel.hidden {
+  display: none;
+}
+
+.menu-editor-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid #333;
+}
+
+.menu-editor-header h3 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.menu-editor-controls {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.menu-items-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.menu-item-editor {
+  border: 2px solid #333;
+  padding: 12px;
+  background: #f8f8f8;
+  position: relative;
+}
+
+.menu-item-editor.has-children {
+  background: #e8f5ff;
+}
+
+.menu-item-controls {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.menu-item-input {
+  width: 100%;
+  padding: 6px;
+  border: 2px solid #333;
+  font-family: 'Architects Daughter', cursive;
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+
+.child-menu-items {
+  margin-left: 20px;
+  margin-top: 8px;
+  border-left: 2px dashed #333;
+  padding-left: 12px;
+}
+
+.menu-item-handle {
+  cursor: move;
+  padding: 4px;
+  background: #ddd;
+  display: inline-block;
+  margin-right: 8px;
+}
+
 /* Menu Box Styles */
 .menu-content {
   padding: 8px;
+  min-height: 30px;
+  cursor: default; /* Menu boxes are only draggable via drag icon */
+  position: relative;
+  z-index: 1; /* Ensure menu content is above box background */
+}
+
+.menu-box {
+  cursor: default; /* Override default box cursor for menu boxes */
+}
+
+/* Menu items should not trigger box selection */
+.menu-item, .menu-item-container {
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+/* Linked menu items should be clearly clickable */
+.menu-item-linked {
+  font-weight: bold;
+  cursor: pointer;
+}
+
+/* Ensure menu items are clickable and don't show text selection */
+.menu-item:hover, .menu-item-container:hover {
+  background-color: #f0f0f0;
+}
+
+/* Child menu items in dropdowns */
+.child-menu-item {
+  font-size: 13px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.child-menu-item:hover {
+  background-color: #e8e8e8;
 }
 
 .menu-item {
@@ -327,8 +509,15 @@ label {
   border: 2px solid #333;
   text-align: center;
   font-size: 14px;
-  cursor: pointer;
+  cursor: default; /* Default cursor for non-linked items */
   user-select: none;
+  position: relative;
+  z-index: 5; /* Ensure menu items are above other box elements */
+}
+
+.menu-item-linked {
+  font-weight: bold;
+  cursor: pointer !important; /* Pointer cursor for linked items */
 }
 
 .menu-item:hover {
@@ -337,4 +526,36 @@ label {
 
 .menu-item.menu-item-linked {
   font-weight: bold;
+}
+
+/* Menu Dropdown Styles */
+.menu-item-container {
+  position: relative;
+  z-index: 5; /* Ensure menu item containers are above other box elements */
+}
+
+.menu-item.has-children {
+  padding-right: 20px;
+}
+
+.menu-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  background: #fff;
+  border: 2px solid #333;
+  padding: 8px;
+  z-index: 100;
+  display: none;
+  min-width: 150px;
+  box-shadow: 2px 2px 0 #333;
+}
+
+.menu-dropdown .menu-item {
+  margin-bottom: 4px;
+  padding: 4px 8px;
+}
+
+.child-menu-item {
+  font-size: 13px;
 }
