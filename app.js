@@ -1,6 +1,11 @@
 // QuickBox - Wireframe Mockup Tool
+// Version
+const APP_VERSION = "0.4";
+
 // State management
 const state = {
+  header: { boxes: [] },
+  footer: { boxes: [] },
   pages: [],
   currentPageId: null,
   selectedBox: null,
@@ -103,6 +108,11 @@ canvas.addEventListener('contextmenu', (e) => {
 initializeState();
 updateNavigator();
 renderCurrentPage();
+updatePageIdentifier();
+
+// Update UI with version number
+document.title = `QuickBox v${APP_VERSION} - Wireframe Mockup Tool`;
+document.getElementById('appTitle').textContent = `QuickBox v${APP_VERSION}`;
 
 // Add Box
 function addBox(type) {
@@ -136,21 +146,21 @@ function addBox(type) {
   if (type === 'menu') {
     box.orientation = 'horizontal';
     box.menuItems = [
-      { 
-        id: `menu-item-${Date.now()}-0`, 
-        text: 'Home', 
+      {
+        id: `menu-item-${Date.now()}-0`,
+        text: 'Home',
         linkTo: null,
         children: []
       },
-      { 
-        id: `menu-item-${Date.now()}-1`, 
-        text: 'About', 
+      {
+        id: `menu-item-${Date.now()}-1`,
+        text: 'About',
         linkTo: null,
         children: []
       },
-      { 
-        id: `menu-item-${Date.now()}-2`, 
-        text: 'Contact', 
+      {
+        id: `menu-item-${Date.now()}-2`,
+        text: 'Contact',
         linkTo: null,
         children: []
       }
@@ -164,7 +174,7 @@ function addBox(type) {
 }
 
 // Render Box
-function renderBox(box) {
+function renderBox(box, region = 'main') {
   const boxEl = document.createElement('div');
   boxEl.className = 'box' + (box.type === 'menu' ? ' menu-box' : '');
   boxEl.id = box.id;
@@ -173,6 +183,9 @@ function renderBox(box) {
   boxEl.style.width = box.width + 'px';
   boxEl.style.height = box.height + 'px';
   boxEl.style.zIndex = box.zIndex;
+
+  // Mark box with region for reference
+  boxEl.dataset.region = region;
 
   // Add link indicator if box has a link
   if (box.linkTo) {
@@ -234,7 +247,28 @@ function renderBox(box) {
   });
 
   boxEl.appendChild(content);
-  canvas.appendChild(boxEl);
+
+  // Append to appropriate region
+  const regionContainer = region === 'header' ? document.getElementById('headerRegion') :
+                         region === 'footer' ? document.getElementById('footerRegion') :
+                         document.getElementById('mainRegion');
+  if (regionContainer) {
+    regionContainer.appendChild(boxEl);
+  } else {
+    canvas.appendChild(boxEl); // Fallback for backward compatibility
+  }
+
+  // Check if box is in header/footer and if we're not on Page 1
+  const isPage1 = state.currentPageId === 'page-1';
+  const isHeaderFooter = region === 'header' || region === 'footer';
+  const isReadOnly = isHeaderFooter && !isPage1;
+
+  // Make header/footer boxes read-only on pages other than Page 1
+  if (isReadOnly) {
+    boxEl.classList.add('read-only-box');
+    content.contentEditable = false;
+    return; // Skip adding interactive event listeners
+  }
 
   // Event listeners
   boxEl.addEventListener('mousedown', (e) => {
@@ -705,26 +739,180 @@ function moveMenuItem(itemId, targetItemId) {
   }
 }
 
+// Get region boundaries for drag detection
+function getRegionBoundaries() {
+  const headerRegion = document.getElementById('headerRegion');
+  const mainRegion = document.getElementById('mainRegion');
+  const footerRegion = document.getElementById('footerRegion');
+
+  if (!headerRegion || !mainRegion || !footerRegion) {
+    return null;
+  }
+
+  const headerRect = headerRegion.getBoundingClientRect();
+  const mainRect = mainRegion.getBoundingClientRect();
+  const footerRect = footerRegion.getBoundingClientRect();
+
+  return {
+    header: { top: headerRect.top, bottom: headerRect.bottom },
+    main: { top: mainRect.top, bottom: mainRect.bottom },
+    footer: { top: footerRect.top, bottom: footerRect.bottom }
+  };
+}
+
+// Detect which region a point is in
+function detectRegion(clientY) {
+  const boundaries = getRegionBoundaries();
+  if (!boundaries) return 'main';
+
+  if (clientY < boundaries.main.top) {
+    return 'header';
+  } else if (clientY > boundaries.main.bottom) {
+    return 'footer';
+  } else {
+    return 'main';
+  }
+}
+
+// Find box in any region
+function findBoxInRegions(boxId) {
+  const currentPage = getCurrentPage();
+
+  // Check header
+  let box = state.header.boxes.find(b => b.id === boxId);
+  if (box) return { box, region: 'header', array: state.header.boxes };
+
+  // Check footer
+  box = state.footer.boxes.find(b => b.id === boxId);
+  if (box) return { box, region: 'footer', array: state.footer.boxes };
+
+  // Check current page main region
+  box = currentPage.boxes.find(b => b.id === boxId);
+  if (box) return { box, region: 'main', array: currentPage.boxes };
+
+  return null;
+}
+
+// Transfer box between regions
+function transferBoxToRegion(box, sourceRegion, sourceArray, targetRegion) {
+  // Remove from source array
+  const index = sourceArray.indexOf(box);
+  if (index > -1) {
+    sourceArray.splice(index, 1);
+  }
+
+  // Adjust y-coordinate relative to new region
+  const boxEl = document.getElementById(box.id);
+  const targetContainer = targetRegion === 'header' ? document.getElementById('headerRegion') :
+                          targetRegion === 'footer' ? document.getElementById('footerRegion') :
+                          document.getElementById('mainRegion');
+
+  if (targetContainer) {
+    const targetRect = targetContainer.getBoundingClientRect();
+    const boxRect = boxEl.getBoundingClientRect();
+    box.y = boxRect.top - targetRect.top;
+  }
+
+  // Add to target array
+  const currentPage = getCurrentPage();
+  if (targetRegion === 'header') {
+    state.header.boxes.push(box);
+  } else if (targetRegion === 'footer') {
+    state.footer.boxes.push(box);
+  } else {
+    currentPage.boxes.push(box);
+  }
+}
+
 // Drag functionality
 function startDrag(e, box) {
   e.preventDefault();
+
+  // Find box and its current region
+  const boxInfo = findBoxInRegions(box.id);
+  if (!boxInfo) return;
+
+  const sourceRegion = boxInfo.region;
+  const sourceArray = boxInfo.array;
+
   const boxEl = document.getElementById(box.id);
   const startX = e.clientX;
   const startY = e.clientY;
   const startLeft = box.x;
   const startTop = box.y;
+  let currentRegion = sourceRegion;
+  let lastHighlightedRegion = null;
 
   function onMouseMove(e) {
     box.x = startLeft + (e.clientX - startX);
     box.y = startTop + (e.clientY - startY);
     boxEl.style.left = box.x + 'px';
     boxEl.style.top = box.y + 'px';
+
+    // Detect current region based on box top-left corner
+    const boxRect = boxEl.getBoundingClientRect();
+    const detectedRegion = detectRegion(boxRect.top);
+
+    // Visual feedback - highlight region
+    if (detectedRegion !== lastHighlightedRegion) {
+      // Remove previous highlight
+      if (lastHighlightedRegion) {
+        const prevRegionEl = document.getElementById(
+          lastHighlightedRegion === 'header' ? 'headerRegion' :
+          lastHighlightedRegion === 'footer' ? 'footerRegion' :
+          'mainRegion'
+        );
+        if (prevRegionEl) prevRegionEl.classList.remove('drag-over');
+      }
+
+      // Add new highlight
+      const regionEl = document.getElementById(
+        detectedRegion === 'header' ? 'headerRegion' :
+        detectedRegion === 'footer' ? 'footerRegion' :
+        'mainRegion'
+      );
+      if (regionEl) regionEl.classList.add('drag-over');
+
+      lastHighlightedRegion = detectedRegion;
+    }
+
+    currentRegion = detectedRegion;
   }
 
   function onMouseUp() {
     document.removeEventListener('mousemove', onMouseMove);
     document.removeEventListener('mouseup', onMouseUp);
-    updateCanvasHeight();
+
+    // Remove all drag-over highlights
+    ['headerRegion', 'mainRegion', 'footerRegion'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.classList.remove('drag-over');
+    });
+
+    // Check if we're trying to edit header/footer and not on Page 1
+    const isPage1 = state.currentPageId === 'page-1';
+    const movingToHeaderFooter = currentRegion === 'header' || currentRegion === 'footer';
+    const sourceIsHeaderFooter = sourceRegion === 'header' || sourceRegion === 'footer';
+
+    if (!isPage1 && (movingToHeaderFooter || sourceIsHeaderFooter)) {
+      // Snap back to original position
+      box.x = startLeft;
+      box.y = startTop;
+      boxEl.style.left = box.x + 'px';
+      boxEl.style.top = box.y + 'px';
+      alert('Header and footer can only be edited on Page 1');
+      return;
+    }
+
+    // Transfer box if region changed
+    if (currentRegion !== sourceRegion) {
+      transferBoxToRegion(box, sourceRegion, sourceArray, currentRegion);
+      renderCurrentPage();
+      updateNavigator();
+      selectBox(box);
+    } else {
+      updateCanvasHeight();
+    }
   }
 
   document.addEventListener('mousemove', onMouseMove);
@@ -852,6 +1040,7 @@ function editPageName(page) {
 
   page.name = prefix + newSuffix.trim();
   updatePagesList();
+  updatePageIdentifier();
 }
 
 // Update Elements List
@@ -860,6 +1049,50 @@ function updateElementsList() {
   elementsList.innerHTML = '';
 
   if (!currentPage) return;
+
+  const isPage1 = state.currentPageId === 'page-1';
+
+  // Add header elements
+  if (state.header.boxes.length > 0) {
+    const headerLabel = document.createElement('div');
+    headerLabel.className = 'element-section-label';
+    headerLabel.textContent = '--- Header ---';
+    elementsList.appendChild(headerLabel);
+
+    state.header.boxes.forEach(box => {
+      const item = document.createElement('div');
+      item.className = 'element-item' + (!isPage1 ? ' read-only' : '');
+      item.textContent = box.name;
+      item.dataset.boxId = box.id;
+      item.title = isPage1 ? 'Right-click to rename' : 'Header (editable on Page 1 only)';
+
+      if (state.selectedBox && state.selectedBox.id === box.id) {
+        item.classList.add('selected');
+      }
+
+      if (isPage1) {
+        item.addEventListener('click', () => {
+          const boxToSelect = state.header.boxes.find(b => b.id === box.id);
+          selectBox(boxToSelect);
+        });
+
+        item.addEventListener('contextmenu', (e) => {
+          e.preventDefault();
+          editElementName(box);
+        });
+      }
+
+      elementsList.appendChild(item);
+    });
+  }
+
+  // Add main page elements
+  if (currentPage.boxes.length > 0) {
+    const mainLabel = document.createElement('div');
+    mainLabel.className = 'element-section-label';
+    mainLabel.textContent = '--- Page Content ---';
+    elementsList.appendChild(mainLabel);
+  }
 
   currentPage.boxes.forEach(box => {
     const item = document.createElement('div');
@@ -884,6 +1117,50 @@ function updateElementsList() {
 
     elementsList.appendChild(item);
   });
+
+  // Add footer elements
+  if (state.footer.boxes.length > 0) {
+    const footerLabel = document.createElement('div');
+    footerLabel.className = 'element-section-label';
+    footerLabel.textContent = '--- Footer ---';
+    elementsList.appendChild(footerLabel);
+
+    state.footer.boxes.forEach(box => {
+      const item = document.createElement('div');
+      item.className = 'element-item' + (!isPage1 ? ' read-only' : '');
+      item.textContent = box.name;
+      item.dataset.boxId = box.id;
+      item.title = isPage1 ? 'Right-click to rename' : 'Footer (editable on Page 1 only)';
+
+      if (state.selectedBox && state.selectedBox.id === box.id) {
+        item.classList.add('selected');
+      }
+
+      if (isPage1) {
+        item.addEventListener('click', () => {
+          const boxToSelect = state.footer.boxes.find(b => b.id === box.id);
+          selectBox(boxToSelect);
+        });
+
+        item.addEventListener('contextmenu', (e) => {
+          e.preventDefault();
+          editElementName(box);
+        });
+      }
+
+      elementsList.appendChild(item);
+    });
+  }
+}
+
+// Update Page Identifier
+function updatePageIdentifier() {
+  const currentPage = getCurrentPage();
+  const pageIdentifier = document.getElementById('pageIdentifier');
+
+  if (currentPage && pageIdentifier) {
+    pageIdentifier.textContent = `${currentPage.name} • ${currentPage.id}`;
+  }
 }
 
 // Edit element name
@@ -912,9 +1189,31 @@ function deleteSelectedBox() {
   if (!currentPage) return;
 
   const boxEl = document.getElementById(state.selectedBox.id);
-  if (boxEl) boxEl.remove();
+  if (boxEl) {
+    const region = boxEl.dataset.region;
 
-  currentPage.boxes = currentPage.boxes.filter(b => b.id !== state.selectedBox.id);
+    // Check if deleting from header/footer and not on Page 1
+    if ((region === 'header' || region === 'footer') && state.currentPageId !== 'page-1') {
+      alert('Header and footer boxes can only be deleted on Page 1');
+      return;
+    }
+
+    boxEl.remove();
+  }
+
+  // Remove from appropriate array
+  const removedFromPage = currentPage.boxes.filter(b => b.id !== state.selectedBox.id);
+  const removedFromHeader = state.header.boxes.filter(b => b.id !== state.selectedBox.id);
+  const removedFromFooter = state.footer.boxes.filter(b => b.id !== state.selectedBox.id);
+
+  if (removedFromPage.length < currentPage.boxes.length) {
+    currentPage.boxes = removedFromPage;
+  } else if (removedFromHeader.length < state.header.boxes.length) {
+    state.header.boxes = removedFromHeader;
+  } else if (removedFromFooter.length < state.footer.boxes.length) {
+    state.footer.boxes = removedFromFooter;
+  }
+
   state.selectedBox = null;
   updateNavigator();
   updateCanvasHeight();
@@ -940,6 +1239,7 @@ function switchToPage(pageId) {
   state.selectedBox = null;
   renderCurrentPage();
   updateNavigator();
+  updatePageIdentifier();
 }
 
 function renderCurrentPage() {
@@ -949,11 +1249,41 @@ function renderCurrentPage() {
   // Clear canvas
   canvas.innerHTML = '';
 
+  // Re-add page identifier
+  const pageIdentifier = document.createElement('div');
+  pageIdentifier.id = 'pageIdentifier';
+  pageIdentifier.className = 'page-identifier';
+  canvas.appendChild(pageIdentifier);
+
+  // Create header region
+  const headerRegion = document.createElement('div');
+  headerRegion.id = 'headerRegion';
+  headerRegion.className = 'header-region';
+  canvas.appendChild(headerRegion);
+
+  // Create main content region
+  const mainRegion = document.createElement('div');
+  mainRegion.id = 'mainRegion';
+  mainRegion.className = 'main-region';
+  canvas.appendChild(mainRegion);
+
+  // Create footer region
+  const footerRegion = document.createElement('div');
+  footerRegion.id = 'footerRegion';
+  footerRegion.className = 'footer-region';
+  canvas.appendChild(footerRegion);
+
   // Set canvas size
   setCanvasSize(currentPage.canvasSize);
 
-  // Render all boxes
-  currentPage.boxes.forEach(box => renderBox(box));
+  // Render header boxes
+  state.header.boxes.forEach(box => renderBox(box, 'header'));
+
+  // Render page boxes in main region
+  currentPage.boxes.forEach(box => renderBox(box, 'main'));
+
+  // Render footer boxes
+  state.footer.boxes.forEach(box => renderBox(box, 'footer'));
 
   updateCanvasHeight();
 }
@@ -1159,6 +1489,9 @@ function newFile() {
 
 function saveFile() {
   const data = {
+    version: APP_VERSION,
+    header: state.header,
+    footer: state.footer,
     pages: state.pages,
     currentPageId: state.currentPageId
   };
@@ -1184,14 +1517,20 @@ function openFile(e) {
     try {
       const data = JSON.parse(event.target.result);
 
+      // Detect and log file version
+      const fileVersion = data.version || detectLegacyVersion(data);
+      console.log(`Loading QuickBox file version: ${fileVersion}`);
+
       // Clear current state
       canvas.innerHTML = '';
       state.pages = [];
+      state.header = { boxes: [] };
+      state.footer = { boxes: [] };
       state.selectedBox = null;
 
       // Check if v0.1 format (backward compatibility)
       if (data.boxes && Array.isArray(data.boxes)) {
-        // Convert v0.1 to v0.2 format
+        // Convert v0.1 to v0.2+ format
         state.pageCounter = 1;
         const page = {
           id: 'page-1',
@@ -1206,16 +1545,27 @@ function openFile(e) {
         state.boxCounter = Math.max(...data.boxes.map(b => parseInt(b.id.split('-')[1])), 0);
         state.zIndexCounter = Math.max(...data.boxes.map(b => b.zIndex), 0) + 1;
       }
-      // v0.2 format
+      // v0.2+ format (includes v0.3+ with version field)
       else if (data.pages && Array.isArray(data.pages)) {
         state.pages = data.pages;
         state.currentPageId = data.currentPageId || (data.pages.length > 0 ? data.pages[0].id : null);
 
+        // Load header/footer if present (v0.4+)
+        if (data.header) {
+          state.header = data.header;
+        }
+        if (data.footer) {
+          state.footer = data.footer;
+        }
+
         // Update counters
         const allBoxes = state.pages.flatMap(p => p.boxes);
-        if (allBoxes.length > 0) {
-          state.boxCounter = Math.max(...allBoxes.map(b => parseInt(b.id.split('-')[1])), 0);
-          state.zIndexCounter = Math.max(...allBoxes.map(b => b.zIndex), 0) + 1;
+        const headerFooterBoxes = [...(state.header.boxes || []), ...(state.footer.boxes || [])];
+        const combinedBoxes = [...allBoxes, ...headerFooterBoxes];
+
+        if (combinedBoxes.length > 0) {
+          state.boxCounter = Math.max(...combinedBoxes.map(b => parseInt(b.id.split('-')[1])), 0);
+          state.zIndexCounter = Math.max(...combinedBoxes.map(b => b.zIndex), 0) + 1;
         }
 
         if (state.pages.length > 0) {
@@ -1230,12 +1580,20 @@ function openFile(e) {
 
       updateNavigator();
       renderCurrentPage();
+      updatePageIdentifier();
     } catch (err) {
       alert('Error opening file: ' + err.message);
     }
   };
   reader.readAsText(file);
   fileInput.value = '';
+}
+
+// Detect legacy file version for backward compatibility
+function detectLegacyVersion(data) {
+  if (data.boxes && Array.isArray(data.boxes)) return "0.1";
+  if (data.pages && Array.isArray(data.pages) && !data.version) return "0.2";
+  return "unknown";
 }
 
 // Image box click to upload
