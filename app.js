@@ -1,6 +1,12 @@
 // QuickBox - Wireframe Mockup Tool
 // Version
-const APP_VERSION = "0.4";
+const APP_VERSION = "0.5";
+
+// Configurable Constants
+// Button element defaults
+const BUTTON_DEFAULT_WIDTH = 80;
+const BUTTON_DEFAULT_HEIGHT = 50;
+const BUTTON_BORDER_RADIUS = 8;
 
 // State management
 const state = {
@@ -11,7 +17,8 @@ const state = {
   selectedBox: null,
   boxCounter: 0,
   pageCounter: 0,
-  zIndexCounter: 1
+  zIndexCounter: 1,
+  currentMode: 'design' // 'design' or 'navigate'
 };
 
 // Initialize with default page
@@ -54,6 +61,7 @@ const saveBtn = document.getElementById('saveBtn');
 const addTextBtn = document.getElementById('addTextBtn');
 const addImageBtn = document.getElementById('addImageBtn');
 const addMenuBtn = document.getElementById('addMenuBtn');
+const addButtonBtn = document.getElementById('addButtonBtn');
 const deleteBtn = document.getElementById('deleteBtn');
 const fontSelect = document.getElementById('fontSelect');
 const fontSizeSelect = document.getElementById('fontSizeSelect');
@@ -61,6 +69,8 @@ const desktopBtn = document.getElementById('desktopBtn');
 const tabletBtn = document.getElementById('tabletBtn');
 const mobileBtn = document.getElementById('mobileBtn');
 const addPageBtn = document.getElementById('addPageBtn');
+const designModeBtn = document.getElementById('designModeBtn');
+const navigateModeBtn = document.getElementById('navigateModeBtn');
 
 // Context menu
 let contextMenu = null;
@@ -72,6 +82,7 @@ saveBtn.addEventListener('click', saveFile);
 addTextBtn.addEventListener('click', () => addBox('text'));
 addImageBtn.addEventListener('click', () => addBox('image'));
 addMenuBtn.addEventListener('click', () => addBox('menu'));
+addButtonBtn.addEventListener('click', () => addBox('button'));
 deleteBtn.addEventListener('click', deleteSelectedBox);
 fontSelect.addEventListener('change', updateFont);
 fontSizeSelect.addEventListener('change', updateFontSize);
@@ -79,6 +90,8 @@ desktopBtn.addEventListener('click', () => setCanvasSize('desktop'));
 tabletBtn.addEventListener('click', () => setCanvasSize('tablet'));
 mobileBtn.addEventListener('click', () => setCanvasSize('mobile'));
 addPageBtn.addEventListener('click', addPage);
+designModeBtn.addEventListener('click', () => setMode('design'));
+navigateModeBtn.addEventListener('click', () => setMode('navigate'));
 fileInput.addEventListener('change', openFile);
 imageInput.addEventListener('change', handleImageUpload);
 
@@ -95,10 +108,10 @@ canvas.addEventListener('click', (e) => {
   }
 });
 
-// Prevent default context menu on boxes
+// Prevent default context menu on boxes (only in Design mode)
 canvas.addEventListener('contextmenu', (e) => {
   const box = e.target.closest('.box');
-  if (box) {
+  if (box && state.currentMode === 'design') {
     e.preventDefault();
     showContextMenu(e, box.id);
   }
@@ -109,10 +122,43 @@ initializeState();
 updateNavigator();
 renderCurrentPage();
 updatePageIdentifier();
+updateModeUI();
 
 // Update UI with version number
 document.title = `QuickBox v${APP_VERSION} - Wireframe Mockup Tool`;
 document.getElementById('appTitle').textContent = `QuickBox v${APP_VERSION}`;
+
+// Mode Management
+function setMode(mode) {
+  const previousMode = state.currentMode;
+  state.currentMode = mode;
+
+  // DEBUG - can be removed later
+  console.log(`Mode switched from ${previousMode} to ${mode}`);
+
+  // Deselect any selected box when switching to Navigate mode
+  if (mode === 'navigate' && state.selectedBox) {
+    // DEBUG - can be removed later
+    console.log('Box deselected due to mode switch to Navigate');
+    selectBox(null);
+  }
+
+  updateModeUI();
+
+  // Re-render current page to update contentEditable state
+  renderCurrentPage();
+}
+
+function updateModeUI() {
+  // Update button states
+  if (state.currentMode === 'design') {
+    designModeBtn.classList.add('active');
+    navigateModeBtn.classList.remove('active');
+  } else {
+    designModeBtn.classList.remove('active');
+    navigateModeBtn.classList.add('active');
+  }
+}
 
 // Add Box
 function addBox(type) {
@@ -126,6 +172,7 @@ function addBox(type) {
   if (type === 'text') boxName = `Text ${state.boxCounter}`;
   else if (type === 'image') boxName = `Image ${state.boxCounter}`;
   else if (type === 'menu') boxName = `Menu ${state.boxCounter}`;
+  else if (type === 'button') boxName = `Button ${state.boxCounter}`;
 
   const box = {
     id: boxId,
@@ -133,8 +180,8 @@ function addBox(type) {
     type: type,
     x: 50 + (state.boxCounter * 20),
     y: 50 + (state.boxCounter * 20),
-    width: type === 'menu' ? 400 : 200,
-    height: type === 'menu' ? 50 : 150,
+    width: type === 'menu' ? 400 : type === 'button' ? BUTTON_DEFAULT_WIDTH : 200,
+    height: type === 'menu' ? 50 : type === 'button' ? BUTTON_DEFAULT_HEIGHT : 150,
     zIndex: state.zIndexCounter++,
     content: '',
     fontSize: '16',
@@ -168,6 +215,10 @@ function addBox(type) {
   }
 
   currentPage.boxes.push(box);
+
+  // DEBUG - can be removed later
+  console.log('Element added:', type, boxId, boxName);
+
   renderBox(box);
   updateNavigator();
   selectBox(box);
@@ -176,7 +227,9 @@ function addBox(type) {
 // Render Box
 function renderBox(box, region = 'main') {
   const boxEl = document.createElement('div');
-  boxEl.className = 'box' + (box.type === 'menu' ? ' menu-box' : '');
+  boxEl.className = 'box';
+  if (box.type === 'menu') boxEl.classList.add('menu-box');
+  if (box.type === 'button') boxEl.classList.add('button-box');
   boxEl.id = box.id;
   boxEl.style.left = box.x + 'px';
   boxEl.style.top = box.y + 'px';
@@ -197,10 +250,18 @@ function renderBox(box, region = 'main') {
   content.className = 'box-content';
 
   if (box.type === 'text') {
-    content.contentEditable = true;
+    content.contentEditable = state.currentMode === 'design' ? 'true' : 'false';
     content.textContent = box.content;
     content.style.fontSize = box.fontSize + 'px';
     content.style.fontFamily = box.fontFamily;
+  } else if (box.type === 'button') {
+    content.contentEditable = state.currentMode === 'design' ? 'true' : 'false';
+    content.textContent = box.content;
+    content.style.fontSize = box.fontSize + 'px';
+    content.style.fontFamily = box.fontFamily;
+    content.style.display = 'flex';
+    content.style.alignItems = 'center';
+    content.style.justifyContent = 'center';
   } else if (box.type === 'image') {
     content.contentEditable = false;
     if (box.content) {
@@ -212,29 +273,18 @@ function renderBox(box, region = 'main') {
     content.contentEditable = false;
     renderMenuContent(content, box);
 
-    // Add drag icon for menu boxes
-    const dragIcon = document.createElement('div');
-    dragIcon.className = 'menu-drag-icon';
-    dragIcon.textContent = '☰';
-    dragIcon.title = 'Drag Menu';
-    dragIcon.addEventListener('mousedown', (e) => {
-      e.stopPropagation(); // Prevent other handlers
-      selectBox(box);
-      startDrag(e, box);
-    });
-
-    // Add edit icon for menu boxes
-    const editIcon = document.createElement('div');
-    editIcon.className = 'menu-edit-icon';
-    editIcon.textContent = '✏️';
-    editIcon.title = 'Edit Menu';
-    editIcon.addEventListener('click', (e) => {
-      e.stopPropagation(); // Prevent box selection
-      openMenuEditor(box);
-    });
-
-    boxEl.appendChild(dragIcon);
-    boxEl.appendChild(editIcon);
+    // Only show edit icon in Design mode for menu boxes
+    if (state.currentMode === 'design') {
+      const editIcon = document.createElement('div');
+      editIcon.className = 'menu-edit-icon';
+      editIcon.textContent = '✏️';
+      editIcon.title = 'Edit Menu';
+      editIcon.addEventListener('click', (e) => {
+        e.stopPropagation(); // Prevent box selection
+        openMenuEditor(box);
+      });
+      boxEl.appendChild(editIcon);
+    }
   }
 
   // Resize handles
@@ -272,39 +322,80 @@ function renderBox(box, region = 'main') {
 
   // Event listeners
   boxEl.addEventListener('mousedown', (e) => {
-    // For menu boxes, only allow selection (no dragging from box area)
+    // In Navigate mode, prevent selection and dragging
+    if (state.currentMode === 'navigate') {
+      return;
+    }
+
+    // Design mode behavior
+    // For menu boxes, allow normal dragging and selection
     if (box.type === 'menu') {
-      // Ignore clicks on menu items, icons, and handles
+      // Ignore clicks on menu items, edit icon, and handles
       const isMenuItemClick = e.target.closest('.menu-item') || e.target.closest('.menu-item-container');
-      const isIconClick = e.target.closest('.menu-edit-icon') || e.target.closest('.menu-drag-icon');
+      const isIconClick = e.target.closest('.menu-edit-icon');
       const isHandleClick = e.target.classList.contains('resize-handle');
 
       if (isMenuItemClick || isIconClick || isHandleClick) {
         return; // Let these elements handle their own events
       }
 
-      // Only select the box when clicking on the background area
-      selectBox(box);
+      // Normal dragging behavior for menu boxes in Design mode
+      if (e.target.classList.contains('box')) {
+        selectBox(box);
+        startDrag(e, box);
+
+        // DEBUG - can be removed later
+        console.log('Box selected in design mode:', box.id, box.type);
+      } else {
+        selectBox(box);
+
+        // DEBUG - can be removed later
+        console.log('Box selected in design mode:', box.id, box.type);
+      }
     } else {
       // Normal box behavior for non-menu boxes
       if (!e.target.classList.contains('resize-handle') && e.target.classList.contains('box')) {
         selectBox(box);
         startDrag(e, box);
+
+        // DEBUG - can be removed later
+        console.log('Box selected in design mode:', box.id, box.type);
       } else if (!e.target.classList.contains('resize-handle')) {
         selectBox(box);
+
+        // DEBUG - can be removed later
+        console.log('Box selected in design mode:', box.id, box.type);
       }
     }
   });
 
-  // Click handler for links
+  // Click handler for links and buttons
   boxEl.addEventListener('click', (e) => {
-    if (box.linkTo && !e.target.classList.contains('resize-handle')) {
+    // In Navigate mode, handle button clicks and links
+    if (state.currentMode === 'navigate') {
+      if (box.type === 'button' || (box.linkTo && !e.target.classList.contains('resize-handle'))) {
+        e.stopPropagation();
+
+        if (box.linkTo) {
+          // DEBUG - can be removed later
+          console.log('Navigation triggered in navigate mode:', box.id, box.linkTo);
+          handleLinkClick(box.linkTo);
+        } else if (box.type === 'button') {
+          // DEBUG - can be removed later
+          console.log('Button clicked in navigate mode (no link):', box.id);
+        }
+      }
+      return;
+    }
+
+    // Design mode - old link behavior (kept for backward compatibility with non-button elements)
+    if (box.linkTo && !e.target.classList.contains('resize-handle') && box.type !== 'button') {
       e.stopPropagation();
       handleLinkClick(box.linkTo);
     }
   });
 
-  if (box.type === 'text') {
+  if (box.type === 'text' || box.type === 'button') {
     content.addEventListener('input', () => {
       box.content = content.textContent;
     });
@@ -319,6 +410,10 @@ function renderBox(box, region = 'main') {
   // Resize handles
   boxEl.querySelectorAll('.resize-handle').forEach(handle => {
     handle.addEventListener('mousedown', (e) => {
+      // Only allow resizing in Design mode
+      if (state.currentMode !== 'design') {
+        return;
+      }
       e.stopPropagation();
       startResize(e, box, handle.dataset.direction);
     });
@@ -363,7 +458,7 @@ function renderMenuContent(content, box) {
       dropdown.style.left = '0';
       dropdown.style.background = '#fff';
       dropdown.style.border = '2px solid #333';
-      dropdown.style.padding = '8px';
+      dropdown.style.padding = '4px';
       dropdown.style.zIndex = '100';
       dropdown.style.display = 'none';
       dropdown.style.minWidth = '150px';
@@ -377,23 +472,29 @@ function renderMenuContent(content, box) {
           childItem.classList.add('menu-item-linked');
         }
         
-        // Add click handler for child item navigation
+        // Add click handler for child item navigation (only in Navigate mode)
         if (child.linkTo) {
           childItem.style.cursor = 'pointer';
           childItem.addEventListener('click', (e) => {
             e.stopPropagation();
-            handleLinkClick(child.linkTo);
+            if (state.currentMode === 'navigate') {
+              // DEBUG - can be removed later
+              console.log('Menu item clicked in navigate mode:', child.text, child.linkTo);
+              handleLinkClick(child.linkTo);
+            }
           });
         } else {
-          // Even non-linked child items should prevent box selection
+          // Even non-linked child items should prevent box selection in Design mode
           childItem.addEventListener('click', (e) => {
             e.stopPropagation();
           });
         }
 
-        // Prevent box dragging on mousedown
+        // Prevent box dragging on mousedown in Design mode
         childItem.addEventListener('mousedown', (e) => {
-          e.stopPropagation();
+          if (state.currentMode === 'design') {
+            e.stopPropagation();
+          }
         });
         
         dropdown.appendChild(childItem);
@@ -423,37 +524,49 @@ function renderMenuContent(content, box) {
     menuItemContainer.appendChild(menuItem);
     content.appendChild(menuItemContainer);
     
-    // Add mousedown and click handlers for navigation
+    // Add mousedown and click handlers for navigation (only in Navigate mode)
     if (item.linkTo) {
       menuItem.style.cursor = 'pointer';
       menuItem.addEventListener('mousedown', (e) => {
-        e.stopPropagation(); // Prevent box selection/dragging
+        if (state.currentMode === 'design') {
+          e.stopPropagation(); // Prevent box selection/dragging in Design mode
+        }
       });
       menuItem.addEventListener('click', (e) => {
-        e.stopPropagation(); // Prevent box selection
-        handleLinkClick(item.linkTo);
+        e.stopPropagation();
+        if (state.currentMode === 'navigate') {
+          // DEBUG - can be removed later
+          console.log('Menu item clicked in navigate mode:', item.text, item.linkTo);
+          handleLinkClick(item.linkTo);
+        }
       });
     } else {
-      // For non-linked items, still prevent box selection to allow future linking
+      // For non-linked items, still prevent box selection in Design mode
       menuItem.addEventListener('mousedown', (e) => {
-        e.stopPropagation(); // Prevent box selection/dragging
+        if (state.currentMode === 'design') {
+          e.stopPropagation(); // Prevent box selection/dragging
+        }
       });
       menuItem.addEventListener('click', (e) => {
-        e.stopPropagation(); // Prevent box selection
+        e.stopPropagation();
       });
     }
 
     // Also add mousedown and click handlers to the container for better click area
     menuItemContainer.addEventListener('mousedown', (e) => {
-      e.stopPropagation(); // Prevent box selection/dragging
+      if (state.currentMode === 'design') {
+        e.stopPropagation(); // Prevent box selection/dragging in Design mode
+      }
     });
 
     menuItemContainer.addEventListener('click', (e) => {
       if (item.linkTo) {
         e.stopPropagation();
-        handleLinkClick(item.linkTo);
+        if (state.currentMode === 'navigate') {
+          handleLinkClick(item.linkTo);
+        }
       } else {
-        e.stopPropagation(); // Prevent box selection
+        e.stopPropagation();
       }
     });
   });
@@ -654,16 +767,20 @@ function showMenuItemLinkDialog(item) {
   if (targetPage === null) return;
   
   if (targetPage === '') {
+    // DEBUG - can be removed later
+    console.log('Menu item link removed:', item.id);
     item.linkTo = null;
   } else {
     const page = state.pages.find(p => p.id === targetPage);
     if (page) {
       item.linkTo = { type: 'page', target: targetPage };
+      // DEBUG - can be removed later
+      console.log('Menu item link created:', item.id, 'page', targetPage);
     } else {
       alert('Page not found');
     }
   }
-  
+
   renderMenuEditor();
 }
 
@@ -991,7 +1108,7 @@ function updateCanvasHeight() {
   });
 
   const minHeight = 600;
-  const padding = 100;
+  const padding = 50;
   const newHeight = Math.max(minHeight, maxBottom + padding);
   canvas.style.height = newHeight + 'px';
 }
@@ -1171,6 +1288,7 @@ function editElementName(box) {
   if (box.type === 'text') prefix = 'Text ';
   else if (box.type === 'image') prefix = 'Image ';
   else if (box.type === 'menu') prefix = 'Menu ';
+  else if (box.type === 'button') prefix = 'Button ';
 
   const suffix = currentName.startsWith(prefix) ? currentName.substring(prefix.length) : currentName;
 
@@ -1206,13 +1324,20 @@ function deleteSelectedBox() {
   const removedFromHeader = state.header.boxes.filter(b => b.id !== state.selectedBox.id);
   const removedFromFooter = state.footer.boxes.filter(b => b.id !== state.selectedBox.id);
 
+  let deletedRegion = '';
   if (removedFromPage.length < currentPage.boxes.length) {
     currentPage.boxes = removedFromPage;
+    deletedRegion = 'main';
   } else if (removedFromHeader.length < state.header.boxes.length) {
     state.header.boxes = removedFromHeader;
+    deletedRegion = 'header';
   } else if (removedFromFooter.length < state.footer.boxes.length) {
     state.footer.boxes = removedFromFooter;
+    deletedRegion = 'footer';
   }
+
+  // DEBUG - can be removed later
+  console.log('Element deleted:', state.selectedBox.type, state.selectedBox.id, state.selectedBox.name, deletedRegion);
 
   state.selectedBox = null;
   updateNavigator();
@@ -1229,14 +1354,23 @@ function addPage() {
     boxes: []
   };
   state.pages.push(newPage);
+
+  // DEBUG - can be removed later
+  console.log('Page added:', newPage.id, newPage.name);
+
   updatePagesList();
 }
 
 function switchToPage(pageId) {
   if (state.currentPageId === pageId) return;
 
+  const fromPageId = state.currentPageId;
   state.currentPageId = pageId;
   state.selectedBox = null;
+
+  // DEBUG - can be removed later
+  console.log('Page switched:', fromPageId, 'to', pageId);
+
   renderCurrentPage();
   updateNavigator();
   updatePageIdentifier();
@@ -1293,8 +1427,10 @@ function showContextMenu(e, boxId) {
   const currentPage = getCurrentPage();
   if (!currentPage) return;
 
-  const box = currentPage.boxes.find(b => b.id === boxId);
-  if (!box) return;
+  // Find box in any region
+  const boxInfo = findBoxInRegions(boxId);
+  if (!boxInfo) return;
+  const box = boxInfo.box;
 
   // Remove existing context menu
   if (contextMenu) {
@@ -1306,6 +1442,18 @@ function showContextMenu(e, boxId) {
   contextMenu.className = 'context-menu';
   contextMenu.style.left = e.clientX + 'px';
   contextMenu.style.top = e.clientY + 'px';
+
+  // Edit Menu option (for menu boxes only)
+  if (box.type === 'menu') {
+    const editMenuOption = document.createElement('div');
+    editMenuOption.className = 'context-menu-item';
+    editMenuOption.textContent = 'Edit Menu';
+    editMenuOption.addEventListener('click', () => {
+      openMenuEditor(box);
+      contextMenu.remove();
+    });
+    contextMenu.appendChild(editMenuOption);
+  }
 
   // Link to Page option
   const linkToPageOption = document.createElement('div');
@@ -1333,6 +1481,9 @@ function showContextMenu(e, boxId) {
     removeLinkOption.className = 'context-menu-item';
     removeLinkOption.textContent = 'Remove Link';
     removeLinkOption.addEventListener('click', () => {
+      // DEBUG - can be removed later
+      console.log('Link removed:', box.id);
+
       box.linkTo = null;
       const boxEl = document.getElementById(box.id);
       if (boxEl) boxEl.classList.remove('has-link');
@@ -1358,16 +1509,20 @@ function closeContextMenu() {
 }
 
 function showPageLinkDialog(box) {
-  const targetPage = prompt('Enter target page number (1, 2, 3...):');
+  const pageList = state.pages.map(p => `${p.name} (${p.id})`).join('\n');
+  const targetPage = prompt(`Link to page:\n\n${pageList}\n\nEnter page ID:`, box.linkTo?.target || '');
   if (!targetPage) return;
 
-  const pageId = `page-${targetPage}`;
+  const pageId = targetPage;
   const page = state.pages.find(p => p.id === pageId);
 
   if (page) {
     box.linkTo = { type: 'page', target: pageId };
     const boxEl = document.getElementById(box.id);
     if (boxEl) boxEl.classList.add('has-link');
+
+    // DEBUG - can be removed later
+    console.log('Link created:', box.id, 'page', pageId);
   } else {
     alert('Page not found');
   }
@@ -1388,6 +1543,9 @@ function showAnchorLinkDialog(box) {
     box.linkTo = { type: 'anchor', target: targetBox };
     const boxEl = document.getElementById(box.id);
     if (boxEl) boxEl.classList.add('has-link');
+
+    // DEBUG - can be removed later
+    console.log('Link created:', box.id, 'anchor', targetBox);
   } else {
     alert('Box not found');
   }
@@ -1411,7 +1569,7 @@ function handleLinkClick(linkTo) {
 
 // Update Font
 function updateFont() {
-  if (!state.selectedBox || state.selectedBox.type !== 'text') return;
+  if (!state.selectedBox || (state.selectedBox.type !== 'text' && state.selectedBox.type !== 'button')) return;
 
   state.selectedBox.fontFamily = fontSelect.value;
   const boxEl = document.getElementById(state.selectedBox.id);
@@ -1421,7 +1579,7 @@ function updateFont() {
 
 // Update Font Size
 function updateFontSize() {
-  if (!state.selectedBox || state.selectedBox.type !== 'text') return;
+  if (!state.selectedBox || (state.selectedBox.type !== 'text' && state.selectedBox.type !== 'button')) return;
 
   state.selectedBox.fontSize = fontSizeSelect.value;
   const boxEl = document.getElementById(state.selectedBox.id);

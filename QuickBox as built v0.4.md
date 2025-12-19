@@ -323,3 +323,138 @@ Page 1 restriction enforcement
 - Updated version to 0.4 in APP_VERSION constant
 - Updated JSON save format to include version field
 - All v0.4 files save with "version": "0.4"
+
+## Still To Be Done
+
+### Critical Priority
+
+**Security & Data Validation**
+- Add comprehensive JSON file validation before loading (prevent crashes with malformed files)
+- Implement input sanitization for all user-editable fields (page names, element names, menu items)
+- Replace deprecated `document.execCommand()` with modern Clipboard API (app.js:406)
+
+**Error Handling**
+- Add error boundaries for image upload operations (app.js:1591-1609)
+- Implement proper error handling for file operations (save/load)
+- Add graceful error recovery for failed state operations
+
+**Memory Management**
+- Fix potential memory leaks from event listeners not being cleaned up when boxes are deleted
+- Remove event listeners when switching pages
+- Clean up orphaned DOM elements
+
+### High Priority
+
+**Code Quality & Maintainability**
+- Remove all DEBUG console.log statements (app.js lines: 136, 219, 347, 381, 481, 540, 771, 1340, 1359, 1372, 1484, 1524, 1547)
+- Refactor large functions into smaller, single-responsibility functions:
+  - `renderBox()` (228-423): 195 lines - split into separate render and event handler functions
+  - `startDrag()` (945-1037): separate drag logic from region transfer logic
+  - `renderMenuContent()` (426-573): 147 lines - extract event handlers
+- Reduce event handler complexity in mousedown handler (app.js:324-421)
+- Eliminate code duplication in menu item event handlers (app.js:476-572)
+- Eliminate code duplication in Elements panel rendering for header/footer (app.js:1172-1270)
+
+**Constants & Configuration**
+- Define constants for all element types (not just buttons):
+  ```javascript
+  const ELEMENT_DEFAULTS = {
+    text: { width: 200, height: 150 },
+    image: { width: 200, height: 150 },
+    menu: { width: 400, height: 50 },
+    button: { width: 80, height: 50 }
+  };
+  ```
+- Create CSS custom properties for repeated colors (#333, #f0f0f0, etc.)
+- Centralize magic numbers (timeouts, offsets, minimum sizes)
+
+### Medium Priority
+
+**Functional Improvements**
+- Fix canvas height calculation to include header/footer boxes (app.js:1095-1114)
+- Fix anchor links to work cross-page (currently only search current page - app.js:1554-1568)
+- Fix dropdown hover race condition (replace setTimeout with proper mouse tracking - app.js:512-517)
+- Fix incomplete read-only implementation for header/footer boxes (app.js:311-321)
+- Add Button element type to feature list (currently exists in code but not documented)
+- Implement Navigate mode functionality (toolbar has mode buttons but limited functionality)
+
+**State Management**
+- Implement a proper state management pattern to prevent direct state mutation
+- Add state validation layer:
+  ```javascript
+  function updateState(updates) {
+    validateStateChanges(updates);
+    Object.assign(state, updates);
+    render();
+  }
+  ```
+- Separate data layer from UI layer
+
+**Architecture**
+- Split app.js into modules (state.js, ui.js, events.js, file-io.js)
+- Separate box rendering from event handler attachment
+- Create reusable event handler factory functions
+
+### Low Priority
+
+**Performance Optimization**
+- Debounce canvas height updates during resize operations
+- Implement virtual scrolling for large element lists
+- Lazy render regions when canvas is very large
+- Optimize re-rendering (only update changed elements, not full page)
+
+**User Experience**
+- Add keyboard shortcuts (Delete key, Ctrl+S for save, Ctrl+N for new)
+- Add undo/redo functionality
+- Add multi-select for boxes
+- Add copy/paste for boxes
+- Add grid snapping option
+- Add alignment tools (align left, center, right, top, middle, bottom)
+- Add distribution tools (distribute horizontally, vertically)
+- Add ruler/guides
+- Add zoom in/out
+- Add export to PNG/SVG
+
+**Testing**
+- Add unit tests for state management functions
+- Add integration tests for drag-and-drop operations
+- Add tests for file loading with various formats and edge cases
+- Add tests for menu dropdown behavior
+- Add tests for link navigation
+- Test memory usage with many boxes/pages
+
+**Documentation**
+- Add JSDoc comments for all functions
+- Create developer documentation for architecture and state management
+- Add inline comments explaining complex algorithms (region detection, coordinate transformation)
+- Update README with complete feature list including Button element and Navigate mode
+
+**Accessibility**
+- Add ARIA labels for toolbar buttons
+- Add keyboard navigation for box selection
+- Add screen reader support
+- Add high contrast mode option
+- Ensure sufficient color contrast ratios
+
+**Browser Compatibility**
+- Test and document supported browsers
+- Add polyfills for older browsers if needed
+- Add fallback for users with JavaScript disabled
+
+### Future Enhancements
+
+**File Format**
+- Add export to HTML/CSS
+- Add import from other wireframe tools
+- Add auto-save to localStorage
+- Add file versioning/history
+
+**Collaboration**
+- Add comments/annotations on boxes
+- Add multi-user editing (requires backend)
+- Add change tracking
+
+**Templates**
+- Add pre-built page templates
+- Add component library
+- Add custom element types

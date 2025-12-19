@@ -18,7 +18,7 @@ body {
 #toolbar {
   background: #fff;
   border-bottom: 2px solid #ccc;
-  padding: 12px;
+  padding: 3px;
   display: flex;
   gap: 20px;
   flex-wrap: wrap;
@@ -30,7 +30,7 @@ body {
   gap: 8px;
   align-items: center;
   border-right: 2px solid #ddd;
-  padding-right: 20px;
+  padding-right: 10px;
 }
 
 .toolbar-section:last-child {
@@ -41,7 +41,7 @@ button {
   font-family: 'Architects Daughter', cursive;
   background: #fff;
   border: 2px solid #333;
-  padding: 6px 12px;
+  padding: 3px 6px;
   cursor: pointer;
   font-size: 14px;
   box-shadow: 2px 2px 0 #333;
@@ -56,7 +56,8 @@ button:active {
   transform: translate(1px, 1px);
 }
 
-.canvas-size-btn.active {
+.canvas-size-btn.active,
+.mode-btn.active {
   background: #333;
   color: #fff;
 }
@@ -64,7 +65,7 @@ button:active {
 select {
   font-family: 'Architects Daughter', cursive;
   border: 2px solid #333;
-  padding: 4px 8px;
+  padding: 2px 4px;
   font-size: 14px;
   background: #fff;
 }
@@ -122,7 +123,7 @@ label {
 }
 
 .nav-section {
-  padding: 16px;
+  padding: 2px;
   border-bottom: 2px solid #ccc;
 }
 
@@ -135,7 +136,7 @@ label {
   margin: 0 0 12px 0;
   font-size: 18px;
   border-bottom: 2px solid #333;
-  padding-bottom: 8px;
+  padding-bottom: 4px;
 }
 
 .nav-section-header {
@@ -148,12 +149,12 @@ label {
 .nav-section-header h3 {
   margin: 0;
   border-bottom: 2px solid #333;
-  padding-bottom: 8px;
+  padding-bottom: 4px;
   flex: 1;
 }
 
 .nav-section-header button {
-  padding: 2px 8px;
+  padding: 1px 4px;
   font-size: 18px;
   line-height: 1;
   margin-left: 8px;
@@ -166,7 +167,7 @@ label {
 }
 
 .page-item, .element-item {
-  padding: 8px;
+  padding: 2px;
   border: 2px solid #333;
   background: #fff;
   cursor: pointer;
@@ -186,7 +187,7 @@ label {
 .element-section-label {
   font-size: 11px;
   color: #666;
-  padding: 4px 8px;
+  padding: 2px 4px;
   margin-top: 8px;
   font-weight: bold;
   border-bottom: 1px solid #ddd;
@@ -209,7 +210,7 @@ label {
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  padding: 20px;
+  padding: 10px;
   overflow: auto;
   background: #e8e8e8;
 }
@@ -234,7 +235,7 @@ label {
   background: rgba(255, 255, 255, 0.95);
   border: 2px solid #333;
   border-radius: 3px 5px 4px 6px / 4px 6px 5px 3px;
-  padding: 4px 10px;
+  padding: 2px 5px;
   font-size: 11px;
   font-family: 'Architects Daughter', cursive;
   color: #333;
@@ -299,6 +300,11 @@ label {
   min-height: 50px;
 }
 
+/* Button Box - Rounded edges */
+.box.button-box {
+  border-radius: 8px;
+}
+
 
 
 .box.selected {
@@ -307,7 +313,7 @@ label {
 }
 
 .box-content {
-  padding: 12px;
+  padding: 3px;
   outline: none;
   height: 100%;
   width: 100%;
@@ -383,7 +389,7 @@ label {
   background: rgba(255, 255, 255, 0.9);
   border: 2px solid #333;
   border-radius: 3px;
-  padding: 2px 6px;
+  padding: 1px 3px;
   font-size: 14px;
   cursor: move;
   z-index: 10;
@@ -435,7 +441,7 @@ label {
 }
 
 .context-menu-item {
-  padding: 8px 12px;
+  padding: 4px 6px;
   cursor: pointer;
   font-size: 14px;
   border-bottom: 1px solid #ddd;
@@ -459,7 +465,7 @@ label {
   border: 2px solid #333;
   box-shadow: 4px 4px 0 #333;
   z-index: 1000;
-  padding: 16px;
+  padding: 2px;
   box-sizing: border-box;
 }
 
@@ -472,7 +478,7 @@ label {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 16px;
-  padding-bottom: 12px;
+  padding-bottom: 6px;
   border-bottom: 2px solid #333;
 }
 
@@ -497,7 +503,7 @@ label {
 
 .menu-item-editor {
   border: 2px solid #333;
-  padding: 12px;
+  padding: 3px;
   background: #f8f8f8;
   position: relative;
 }
@@ -514,7 +520,7 @@ label {
 
 .menu-item-input {
   width: 100%;
-  padding: 6px;
+  padding: 3px;
   border: 2px solid #333;
   font-family: 'Architects Daughter', cursive;
   font-size: 14px;
@@ -525,12 +531,12 @@ label {
   margin-left: 20px;
   margin-top: 8px;
   border-left: 2px dashed #333;
-  padding-left: 12px;
+  padding-left: 6px;
 }
 
 .menu-item-handle {
   cursor: move;
-  padding: 4px;
+  padding: 2px;
   background: #ddd;
   display: inline-block;
   margin-right: 8px;
@@ -538,7 +544,7 @@ label {
 
 /* Menu Box Styles */
 .menu-content {
-  padding: 8px;
+  padding: 2px;
   min-height: 30px;
   cursor: default; /* Menu boxes are only draggable via drag icon */
   position: relative;
@@ -570,7 +576,7 @@ label {
 /* Child menu items in dropdowns */
 .child-menu-item {
   font-size: 13px;
-  padding: 4px 8px;
+  padding: 2px 4px;
   cursor: pointer;
 }
 
@@ -579,7 +585,7 @@ label {
 }
 
 .menu-item {
-  padding: 6px 12px;
+  padding: 3px 6px;
   background: #f0f0f0;
   border: 2px solid #333;
   text-align: center;
@@ -610,7 +616,7 @@ label {
 }
 
 .menu-item.has-children {
-  padding-right: 20px;
+  padding-right: 10px;
 }
 
 .menu-dropdown {
@@ -619,7 +625,7 @@ label {
   left: 0;
   background: #fff;
   border: 2px solid #333;
-  padding: 8px;
+  padding: 2px;
   z-index: 100;
   display: none;
   min-width: 150px;
@@ -628,7 +634,7 @@ label {
 
 .menu-dropdown .menu-item {
   margin-bottom: 4px;
-  padding: 4px 8px;
+  padding: 2px 4px;
 }
 
 .child-menu-item {
