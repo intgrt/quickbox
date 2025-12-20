@@ -2,12 +2,14 @@
 // Version
 const APP_VERSION = "0.5";
 
+// @agent:AppConfig:authority
 // Configurable Constants
 // Button element defaults
 const BUTTON_DEFAULT_WIDTH = 80;
 const BUTTON_DEFAULT_HEIGHT = 50;
 const BUTTON_BORDER_RADIUS = 8;
 
+// @agent:StateManagement:authority
 // State management
 const state = {
   header: { boxes: [] },
@@ -21,6 +23,7 @@ const state = {
   currentMode: 'design' // 'design' or 'navigate'
 };
 
+// @agent:StateManagement:entry
 // Initialize with default page
 function initializeState() {
   if (state.pages.length === 0) {
@@ -117,6 +120,7 @@ canvas.addEventListener('contextmenu', (e) => {
   }
 });
 
+// @agent:App:entry
 // Initialize
 initializeState();
 updateNavigator();
@@ -128,6 +132,7 @@ updateModeUI();
 document.title = `QuickBox v${APP_VERSION} - Wireframe Mockup Tool`;
 document.getElementById('appTitle').textContent = `QuickBox v${APP_VERSION}`;
 
+// @agent:ModeToggle:authority
 // Mode Management
 function setMode(mode) {
   const previousMode = state.currentMode;
@@ -160,6 +165,7 @@ function updateModeUI() {
   }
 }
 
+// @agent:BoxManagement:authority
 // Add Box
 function addBox(type) {
   const currentPage = getCurrentPage();
@@ -224,6 +230,7 @@ function addBox(type) {
   selectBox(box);
 }
 
+// @agent:BoxRendering:authority
 // Render Box
 function renderBox(box, region = 'main') {
   const boxEl = document.createElement('div');
@@ -422,6 +429,7 @@ function renderBox(box, region = 'main') {
   updateCanvasHeight();
 }
 
+// @agent:MenuRendering:authority
 // Render menu content
 function renderMenuContent(content, box) {
   content.innerHTML = '';
@@ -572,6 +580,7 @@ function renderMenuContent(content, box) {
   });
 }
 
+// @agent:BoxSelection:authority
 // Select Box
 function selectBox(box) {
   state.selectedBox = box;
@@ -601,6 +610,7 @@ function selectBox(box) {
   }
 }
 
+// @agent:MenuEditor:authority
 // Menu Editor Functions
 let currentEditingMenu = null;
 
@@ -856,6 +866,7 @@ function moveMenuItem(itemId, targetItemId) {
   }
 }
 
+// @agent:RegionManagement:authority
 // Get region boundaries for drag detection
 function getRegionBoundaries() {
   const headerRegion = document.getElementById('headerRegion');
@@ -941,6 +952,7 @@ function transferBoxToRegion(box, sourceRegion, sourceArray, targetRegion) {
   }
 }
 
+// @agent:DragDrop:authority
 // Drag functionality
 function startDrag(e, box) {
   e.preventDefault();
@@ -1036,6 +1048,7 @@ function startDrag(e, box) {
   document.addEventListener('mouseup', onMouseUp);
 }
 
+// @agent:BoxResize:authority
 // Resize functionality
 function startResize(e, box, direction) {
   e.preventDefault();
@@ -1113,6 +1126,7 @@ function updateCanvasHeight() {
   canvas.style.height = newHeight + 'px';
 }
 
+// @agent:Navigator:authority
 // Update Navigator (Pages and Elements)
 function updateNavigator() {
   updatePagesList();
@@ -1299,6 +1313,7 @@ function editElementName(box) {
   updateElementsList();
 }
 
+// @agent:BoxManagement:extension
 // Delete Selected Box
 function deleteSelectedBox() {
   if (!state.selectedBox) return;
@@ -1344,6 +1359,7 @@ function deleteSelectedBox() {
   updateCanvasHeight();
 }
 
+// @agent:PageManagement:authority
 // Page Management
 function addPage() {
   state.pageCounter++;
@@ -1422,6 +1438,7 @@ function renderCurrentPage() {
   updateCanvasHeight();
 }
 
+// @agent:ContextMenu:authority
 // Context Menu
 function showContextMenu(e, boxId) {
   const currentPage = getCurrentPage();
@@ -1551,6 +1568,7 @@ function showAnchorLinkDialog(box) {
   }
 }
 
+// @agent:LinkNavigation:authority
 // Link Navigation
 function handleLinkClick(linkTo) {
   if (!linkTo) return;
@@ -1608,6 +1626,7 @@ function handleImageUpload(e) {
   imageInput.value = '';
 }
 
+// @agent:CanvasSize:authority
 // Canvas Size
 function setCanvasSize(size) {
   const currentPage = getCurrentPage();
@@ -1624,6 +1643,7 @@ function setCanvasSize(size) {
   if (size === 'mobile') mobileBtn.classList.add('active');
 }
 
+// @agent:FileOperations:authority
 // File Operations
 function newFile() {
   const totalBoxes = state.pages.reduce((sum, page) => sum + page.boxes.length, 0);
