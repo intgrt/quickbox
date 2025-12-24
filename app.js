@@ -284,6 +284,7 @@ function renderBox(box, region = 'main') {
     if (state.currentMode === 'design') {
       const editIcon = document.createElement('div');
       editIcon.className = 'menu-edit-icon';
+      // Reviewed encoding risk; keep Unicode symbol for aesthetics.
       editIcon.textContent = '✏️';
       editIcon.title = 'Edit Menu';
       editIcon.addEventListener('click', (e) => {
@@ -456,6 +457,7 @@ function renderMenuContent(content, box) {
     
     if (item.children.length > 0) {
       menuItem.classList.add('has-children');
+      // Reviewed encoding risk; keep Unicode symbol for aesthetics.
       menuItem.textContent += ' ▼';
       
       // Create dropdown container
@@ -1290,6 +1292,7 @@ function updatePageIdentifier() {
   const pageIdentifier = document.getElementById('pageIdentifier');
 
   if (currentPage && pageIdentifier) {
+    // Reviewed encoding risk; keep Unicode symbol for aesthetics.
     pageIdentifier.textContent = `${currentPage.name} • ${currentPage.id}`;
   }
 }
