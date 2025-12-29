@@ -1,6 +1,6 @@
 // QuickBox - Wireframe Mockup Tool
 // Version
-const APP_VERSION = "0.5";
+const APP_VERSION = "0.6";
 
 // @agent:AppConfig:authority
 // Configurable Constants
@@ -12,8 +12,8 @@ const BUTTON_BORDER_RADIUS = 8;
 // @agent:StateManagement:authority
 // State management
 const state = {
-  header: { boxes: [] },
-  footer: { boxes: [] },
+  header: { boxes: [], height: 80 },
+  footer: { boxes: [], height: 80 },
   pages: [],
   currentPageId: null,
   selectedBox: null,
@@ -180,12 +180,19 @@ function addBox(type) {
   else if (type === 'menu') boxName = `Menu ${state.boxCounter}`;
   else if (type === 'button') boxName = `Button ${state.boxCounter}`;
 
+  // Calculate position based on number of boxes on current page (not boxCounter)
+  // This keeps new boxes visible on the canvas
+  const currentBoxCount = currentPage.boxes.length;
+  const offsetMultiplier = currentBoxCount % 20; // Wrap around after 20 to stay within canvas
+  const positionX = 50 + (offsetMultiplier * 30);
+  const positionY = 50 + (offsetMultiplier * 30);
+
   const box = {
     id: boxId,
     name: boxName,
     type: type,
-    x: 50 + (state.boxCounter * 20),
-    y: 50 + (state.boxCounter * 20),
+    x: positionX,
+    y: positionY,
     width: type === 'menu' ? 400 : type === 'button' ? BUTTON_DEFAULT_WIDTH : 200,
     height: type === 'menu' ? 50 : type === 'button' ? BUTTON_DEFAULT_HEIGHT : 150,
     zIndex: state.zIndexCounter++,
@@ -230,9 +237,22 @@ function addBox(type) {
   selectBox(box);
 }
 
+// @agent:BoxRendering:extension
+// Ensure regions exist before rendering
+function ensureRegionsExist() {
+  if (!document.getElementById('headerRegion') ||
+      !document.getElementById('mainRegion') ||
+      !document.getElementById('footerRegion')) {
+    renderCurrentPage();
+  }
+}
+
 // @agent:BoxRendering:authority
 // Render Box
 function renderBox(box, region = 'main') {
+  // Ensure regions exist before rendering
+  ensureRegionsExist();
+
   const boxEl = document.createElement('div');
   boxEl.className = 'box';
   if (box.type === 'menu') boxEl.classList.add('menu-box');
@@ -954,6 +974,93 @@ function transferBoxToRegion(box, sourceRegion, sourceArray, targetRegion) {
   }
 }
 
+// @agent:RegionManagement:extension
+// Region divider drag functionality
+function startRegionDividerDrag(e, regionType) {
+  // Only allow in design mode
+  if (state.currentMode !== 'design') return;
+
+  e.preventDefault();
+  e.stopPropagation();
+
+  const startY = e.clientY;
+  const startHeight = regionType === 'header' ? state.header.height : state.footer.height;
+  const minHeight = 60;
+
+  function onMouseMove(e) {
+    const deltaY = e.clientY - startY;
+    let newHeight;
+
+    if (regionType === 'header') {
+      newHeight = Math.max(minHeight, startHeight + deltaY);
+      state.header.height = newHeight;
+      const headerRegion = document.getElementById('headerRegion');
+      if (headerRegion) {
+        headerRegion.style.height = newHeight + 'px';
+      }
+    } else if (regionType === 'footer') {
+      newHeight = Math.max(minHeight, startHeight - deltaY);
+      state.footer.height = newHeight;
+      const footerRegion = document.getElementById('footerRegion');
+      if (footerRegion) {
+        footerRegion.style.height = newHeight + 'px';
+      }
+    }
+
+    updateCanvasHeight();
+  }
+
+  function onMouseUp() {
+    document.removeEventListener('mousemove', onMouseMove);
+    document.removeEventListener('mouseup', onMouseUp);
+  }
+
+  document.addEventListener('mousemove', onMouseMove);
+  document.addEventListener('mouseup', onMouseUp);
+}
+
+// @agent:RegionManagement:extension
+// Setup region divider event listeners
+function setupRegionDividers() {
+  // Only show dividers in design mode
+  if (state.currentMode !== 'design') return;
+
+  const headerRegion = document.getElementById('headerRegion');
+  const footerRegion = document.getElementById('footerRegion');
+
+  // Create and attach header divider
+  if (headerRegion) {
+    // Remove existing divider if present
+    const existingHeaderDivider = document.getElementById('headerDivider');
+    if (existingHeaderDivider) existingHeaderDivider.remove();
+
+    const headerDivider = document.createElement('div');
+    headerDivider.id = 'headerDivider';
+    headerDivider.className = 'region-divider header-divider';
+    headerRegion.appendChild(headerDivider);
+
+    headerDivider.addEventListener('mousedown', (e) => {
+      startRegionDividerDrag(e, 'header');
+    });
+  }
+
+  // Create and attach footer divider
+  if (footerRegion) {
+    // Remove existing divider if present
+    const existingFooterDivider = document.getElementById('footerDivider');
+    if (existingFooterDivider) existingFooterDivider.remove();
+
+    const footerDivider = document.createElement('div');
+    footerDivider.id = 'footerDivider';
+    footerDivider.className = 'region-divider footer-divider';
+    footerRegion.appendChild(footerDivider);
+
+    footerDivider.addEventListener('mousedown', (e) => {
+      startRegionDividerDrag(e, 'footer');
+    });
+  }
+}
+
 // @agent:DragDrop:authority
 // Drag functionality
 function startDrag(e, box) {
@@ -1106,26 +1213,63 @@ function startResize(e, box, direction) {
   document.addEventListener('mouseup', onMouseUp);
 }
 
+// @agent:CanvasHeight:authority
 // Update Canvas Height
 function updateCanvasHeight() {
   const currentPage = getCurrentPage();
-  if (!currentPage || currentPage.boxes.length === 0) {
-    canvas.style.height = '600px';
-    return;
+
+  // Use state heights for header/footer, calculate boxes position for minimum
+  let headerBoxBottom = 60; // Default min based on box positions
+  let mainMaxBottom = 400;  // Default min height for main
+  let footerBoxBottom = 60; // Default min based on box positions
+
+  // Check header boxes to see if they exceed the region height
+  if (state.header.boxes.length > 0) {
+    state.header.boxes.forEach(box => {
+      const bottom = box.y + box.height;
+      if (bottom > headerBoxBottom) {
+        headerBoxBottom = bottom;
+      }
+    });
   }
 
-  let maxBottom = 0;
-  currentPage.boxes.forEach(box => {
-    const bottom = box.y + box.height;
-    if (bottom > maxBottom) {
-      maxBottom = bottom;
-    }
-  });
+  // Check main page boxes
+  if (currentPage && currentPage.boxes.length > 0) {
+    currentPage.boxes.forEach(box => {
+      const bottom = box.y + box.height;
+      if (bottom > mainMaxBottom) {
+        mainMaxBottom = bottom;
+      }
+    });
+  }
 
-  const minHeight = 600;
+  // Check footer boxes to see if they exceed the region height
+  if (state.footer.boxes.length > 0) {
+    state.footer.boxes.forEach(box => {
+      const bottom = box.y + box.height;
+      if (bottom > footerBoxBottom) {
+        footerBoxBottom = bottom;
+      }
+    });
+  }
+
+  // Use the maximum of state height and box-calculated height for header/footer
+  const headerHeight = Math.max(state.header.height || 80, headerBoxBottom);
+  const footerHeight = Math.max(state.footer.height || 80, footerBoxBottom);
+
+  // Calculate total height needed
   const padding = 50;
-  const newHeight = Math.max(minHeight, maxBottom + padding);
+  const totalHeight = headerHeight + mainMaxBottom + footerHeight + padding;
+  const minHeight = 600;
+  const newHeight = Math.max(minHeight, totalHeight);
+
   canvas.style.height = newHeight + 'px';
+
+  // Update the main region height to ensure it can contain all boxes
+  const mainRegion = document.getElementById('mainRegion');
+  if (mainRegion) {
+    mainRegion.style.height = (mainMaxBottom + padding) + 'px';
+  }
 }
 
 // @agent:Navigator:authority
@@ -1395,6 +1539,7 @@ function switchToPage(pageId) {
   updatePageIdentifier();
 }
 
+// @agent:PageRendering:authority
 function renderCurrentPage() {
   const currentPage = getCurrentPage();
   if (!currentPage) return;
@@ -1412,6 +1557,7 @@ function renderCurrentPage() {
   const headerRegion = document.createElement('div');
   headerRegion.id = 'headerRegion';
   headerRegion.className = 'header-region';
+  headerRegion.style.height = state.header.height + 'px';
   canvas.appendChild(headerRegion);
 
   // Create main content region
@@ -1424,6 +1570,7 @@ function renderCurrentPage() {
   const footerRegion = document.createElement('div');
   footerRegion.id = 'footerRegion';
   footerRegion.className = 'footer-region';
+  footerRegion.style.height = state.footer.height + 'px';
   canvas.appendChild(footerRegion);
 
   // Set canvas size
@@ -1437,6 +1584,9 @@ function renderCurrentPage() {
 
   // Render footer boxes
   state.footer.boxes.forEach(box => renderBox(box, 'footer'));
+
+  // Setup region divider drag listeners
+  setupRegionDividers();
 
   updateCanvasHeight();
 }
@@ -1668,7 +1818,8 @@ function newFile() {
   renderCurrentPage();
 }
 
-function saveFile() {
+// @agent:FileOperations:authority
+async function saveFile() {
   const data = {
     version: APP_VERSION,
     header: state.header,
@@ -1678,15 +1829,44 @@ function saveFile() {
   };
 
   const json = JSON.stringify(data, null, 2);
-  const blob = new Blob([json], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
 
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'quickbox-mockup.json';
-  a.click();
+  // Check if File System Access API is supported
+  if ('showSaveFilePicker' in window) {
+    try {
+      // Show save file picker to let user choose location and filename
+      const handle = await window.showSaveFilePicker({
+        suggestedName: 'quickbox-mockup.json',
+        types: [{
+          description: 'JSON Files',
+          accept: { 'application/json': ['.json'] }
+        }]
+      });
 
-  URL.revokeObjectURL(url);
+      // Create a writable stream and write the JSON data
+      const writable = await handle.createWritable();
+      await writable.write(json);
+      await writable.close();
+
+      console.log('File saved successfully');
+    } catch (err) {
+      // User cancelled the picker or an error occurred
+      if (err.name !== 'AbortError') {
+        console.error('Error saving file:', err);
+        alert('Error saving file: ' + err.message);
+      }
+    }
+  } else {
+    // Fallback for browsers that don't support File System Access API
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'quickbox-mockup.json';
+    a.click();
+
+    URL.revokeObjectURL(url);
+  }
 }
 
 function openFile(e) {
@@ -1705,8 +1885,8 @@ function openFile(e) {
       // Clear current state
       canvas.innerHTML = '';
       state.pages = [];
-      state.header = { boxes: [] };
-      state.footer = { boxes: [] };
+      state.header = { boxes: [], height: 80 };
+      state.footer = { boxes: [], height: 80 };
       state.selectedBox = null;
 
       // Check if v0.1 format (backward compatibility)

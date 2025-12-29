@@ -295,6 +295,26 @@ label {
   background: rgba(51, 51, 51, 0.02);
 }
 
+/* @agent:RegionLayout:extension */
+/* Region divider handles */
+.region-divider {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 10px;
+  cursor: ns-resize;
+  z-index: 1000;
+  user-select: none;
+}
+
+.header-divider {
+  bottom: -5px;
+}
+
+.footer-divider {
+  top: -5px;
+}
+
 /* @agent:Box:authority */
 /* Box Styles */
 .box {

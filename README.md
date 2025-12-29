@@ -1,16 +1,20 @@
 # QuickBox
 
+**Version 0.6**
+
 A lightweight wireframe mockup tool for rapid web page prototyping.
 
 ## Features
 
 - Multi-page support with navigation
-- Text, image, and menu boxes
+- Text, image, menu, and button boxes
 - Drag-and-drop positioning
 - 8-direction resizing
+- Resizable header and footer regions
 - Page and anchor linking
 - Responsive canvas (desktop, tablet, mobile)
-- Save/load JSON files
+- Save/load JSON files with folder selection
+- Design and Navigate modes
 - Hand-drawn Balsamiq-style aesthetic
 
 ## Usage
@@ -40,8 +44,14 @@ Open `index.html` in a web browser to start using QuickBox.
 ### File Operations
 
 - **New**: Create new mockup (warns if unsaved changes)
-- **Save**: Download as JSON file
+- **Save**: Select folder and filename using file picker (modern browsers)
 - **Open**: Load existing JSON file
+
+### Regions
+
+- **Header/Footer**: Shared across all pages
+- **Resize regions**: Drag the dashed border lines to adjust header/footer height (Design mode only)
+- **Minimum height**: 60px enforced for header and footer
 
 ## Technical Stack
 
@@ -52,10 +62,19 @@ Open `index.html` in a web browser to start using QuickBox.
 
 ## File Format
 
-QuickBox saves files in JSON format with the following structure:
+QuickBox v0.6 saves files in JSON format with the following structure:
 
 ```json
 {
+  "version": "0.6",
+  "header": {
+    "boxes": [...],
+    "height": 80
+  },
+  "footer": {
+    "boxes": [...],
+    "height": 80
+  },
   "pages": [
     {
       "id": "page-1",
@@ -68,7 +87,7 @@ QuickBox saves files in JSON format with the following structure:
 }
 ```
 
-Backward compatible with v0.1 files.
+**Note**: v0.6 files are not backward compatible with earlier versions due to new header/footer structure.
 
 ## License
 
