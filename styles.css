@@ -325,7 +325,7 @@ label {
   box-shadow: 2px 2px 0 rgba(0,0,0,0.3);
   cursor: move;
   min-width: 50px;
-  min-height: 50px;
+  min-height: 30px;
 }
 
 /* @agent:Box:override */
@@ -342,7 +342,7 @@ label {
 }
 
 .box-content {
-  padding: 3px;
+  padding: 0px;
   outline: none;
   height: 100%;
   width: 100%;

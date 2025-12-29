@@ -1,6 +1,6 @@
 // QuickBox - Wireframe Mockup Tool
 // Version
-const APP_VERSION = "0.6";
+const APP_VERSION = "0.7";
 
 // @agent:AppConfig:authority
 // Configurable Constants
@@ -194,7 +194,7 @@ function addBox(type) {
     x: positionX,
     y: positionY,
     width: type === 'menu' ? 400 : type === 'button' ? BUTTON_DEFAULT_WIDTH : 200,
-    height: type === 'menu' ? 50 : type === 'button' ? BUTTON_DEFAULT_HEIGHT : 150,
+    height: type === 'menu' ? 50 : type === 'button' ? BUTTON_DEFAULT_HEIGHT : type === 'text' ? 30 : 150,
     zIndex: state.zIndexCounter++,
     content: '',
     fontSize: '16',
@@ -300,8 +300,22 @@ function renderBox(box, region = 'main') {
     content.contentEditable = false;
     renderMenuContent(content, box);
 
-    // Only show edit icon in Design mode for menu boxes
+    // Only show drag and edit icons in Design mode for menu boxes
     if (state.currentMode === 'design') {
+      // Drag icon in top left
+      const dragIcon = document.createElement('div');
+      dragIcon.className = 'menu-drag-icon';
+      // Reviewed encoding risk; keep Unicode symbol for aesthetics.
+      dragIcon.textContent = '☰';
+      dragIcon.title = 'Drag Menu';
+      dragIcon.addEventListener('mousedown', (e) => {
+        e.stopPropagation();
+        selectBox(box);
+        startDrag(e, box);
+      });
+      boxEl.appendChild(dragIcon);
+
+      // Edit icon in top right
       const editIcon = document.createElement('div');
       editIcon.className = 'menu-edit-icon';
       // Reviewed encoding risk; keep Unicode symbol for aesthetics.
@@ -1176,21 +1190,21 @@ function startResize(e, box, direction) {
     const deltaY = e.clientY - startY;
 
     if (direction.includes('e')) {
-      box.width = Math.max(50, startWidth + deltaX);
+      box.width = Math.max(30, startWidth + deltaX);
     }
     if (direction.includes('w')) {
-      const newWidth = Math.max(50, startWidth - deltaX);
-      if (newWidth > 50) {
+      const newWidth = Math.max(30, startWidth - deltaX);
+      if (newWidth > 30) {
         box.width = newWidth;
         box.x = startLeft + deltaX;
       }
     }
     if (direction.includes('s')) {
-      box.height = Math.max(50, startHeight + deltaY);
+      box.height = Math.max(30, startHeight + deltaY);
     }
     if (direction.includes('n')) {
-      const newHeight = Math.max(50, startHeight - deltaY);
-      if (newHeight > 50) {
+      const newHeight = Math.max(30, startHeight - deltaY);
+      if (newHeight > 30) {
         box.height = newHeight;
         box.y = startTop + deltaY;
       }
@@ -1661,6 +1675,17 @@ function showContextMenu(e, boxId) {
     });
     contextMenu.appendChild(removeLinkOption);
   }
+
+  // Delete option
+  const deleteOption = document.createElement('div');
+  deleteOption.className = 'context-menu-item';
+  deleteOption.textContent = 'Delete';
+  deleteOption.addEventListener('click', () => {
+    selectBox(box);
+    deleteSelectedBox();
+    contextMenu.remove();
+  });
+  contextMenu.appendChild(deleteOption);
 
   document.body.appendChild(contextMenu);
 
