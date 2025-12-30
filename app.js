@@ -1,6 +1,6 @@
 // QuickBox - Wireframe Mockup Tool
 // Version
-const APP_VERSION = "0.7";
+const APP_VERSION = "0.8";
 
 // @agent:AppConfig:authority
 // Configurable Constants
@@ -20,7 +20,9 @@ const state = {
   boxCounter: 0,
   pageCounter: 0,
   zIndexCounter: 1,
-  currentMode: 'design' // 'design' or 'navigate'
+  currentMode: 'design', // 'design' or 'navigate'
+  tempGroup: [], // Temporary group for dragging multiple boxes
+  groupSelectMode: false // Flag for rectangle selection active
 };
 
 // @agent:StateManagement:entry
@@ -104,11 +106,175 @@ addChildMenuItemBtn.addEventListener('click', addChildMenuItem);
 saveMenuBtn.addEventListener('click', saveMenu);
 closeMenuEditorBtn.addEventListener('click', closeMenuEditor);
 
+// Create Group button
+document.getElementById('createGroupBtn').addEventListener('click', () => {
+  console.log('Create Group button clicked. Current groupSelectMode:', state.groupSelectMode);
+
+  state.groupSelectMode = !state.groupSelectMode;
+
+  console.log('groupSelectMode is now:', state.groupSelectMode);
+
+  const btn = document.getElementById('createGroupBtn');
+  if (state.groupSelectMode) {
+    console.log('Entering group selection mode - cursor set to crosshair');
+    btn.style.background = '#333';
+    btn.style.color = '#fff';
+    canvas.style.cursor = 'crosshair';
+  } else {
+    console.log('Exiting group selection mode');
+    btn.style.background = '#fff';
+    btn.style.color = '#000';
+    canvas.style.cursor = 'default';
+    clearTempGroup();
+  }
+});
+
 // Canvas click to deselect
 canvas.addEventListener('click', (e) => {
   if (e.target === canvas) {
-    selectBox(null);
+    if (!state.groupSelectMode) {
+      selectBox(null);
+    }
   }
+});
+
+// @agent:GroupSelection:authority
+// Rectangle selection for group selection
+canvas.addEventListener('mousedown', (e) => {
+  if (!state.groupSelectMode) return;
+
+  // Only start rectangle selection if clicking on empty canvas, not on a box
+  if (e.target !== canvas && e.target.closest('.box')) {
+    console.log('Clicked on a box, not starting rectangle selection');
+    return;
+  }
+
+  console.log('Group selection started at:', e.clientX, e.clientY);
+
+  const canvasRect = canvas.getBoundingClientRect();
+  const startX = e.clientX - canvasRect.left;
+  const startY = e.clientY - canvasRect.top;
+
+  // Debug: Check canvas structure
+  const headerRegion = document.getElementById('headerRegion');
+  const mainRegion = document.getElementById('mainRegion');
+  const footerRegion = document.getElementById('footerRegion');
+
+  console.log('Canvas rect:', { left: canvasRect.left, top: canvasRect.top, width: canvasRect.width, height: canvasRect.height });
+  console.log('Start position relative to canvas:', { startX, startY });
+  console.log('Header height:', headerRegion ? headerRegion.offsetHeight : 'N/A');
+  console.log('Main region offset:', mainRegion ? mainRegion.offsetTop : 'N/A');
+  console.log('Selection starting inside:', {
+    insideCanvas: startX >= 0 && startY >= 0,
+    startX, startY
+  });
+
+  let selectionRect = document.getElementById('selectionRectangle');
+  if (!selectionRect) {
+    selectionRect = document.createElement('div');
+    selectionRect.id = 'selectionRectangle';
+    selectionRect.className = 'selection-rectangle';
+    canvas.appendChild(selectionRect);
+    console.log('Created selection rectangle element');
+  }
+
+  function onMouseMove(e) {
+    const currentX = e.clientX - canvasRect.left;
+    const currentY = e.clientY - canvasRect.top;
+
+    const left = Math.min(startX, currentX);
+    const top = Math.min(startY, currentY);
+    const width = Math.abs(currentX - startX);
+    const height = Math.abs(currentY - startY);
+
+    selectionRect.style.left = left + 'px';
+    selectionRect.style.top = top + 'px';
+    selectionRect.style.width = width + 'px';
+    selectionRect.style.height = height + 'px';
+    selectionRect.style.display = 'block';
+
+    // Detailed logging during drag
+    console.log('Selection rectangle updating:', {
+      left, top, width, height,
+      startX, startY,
+      currentX, currentY,
+      canvasRect: { left: canvasRect.left, top: canvasRect.top }
+    });
+  }
+
+  function onMouseUp(e) {
+    document.removeEventListener('mousemove', onMouseMove);
+    document.removeEventListener('mouseup', onMouseUp);
+
+    // Get the actual rendered position and size of the selection rectangle
+    const rect = selectionRect.getBoundingClientRect();
+    const left = parseInt(selectionRect.style.left) || 0;
+    const top = parseInt(selectionRect.style.top) || 0;
+    const right = left + parseInt(selectionRect.style.width) || 0;
+    const bottom = top + parseInt(selectionRect.style.height) || 0;
+
+    console.log('Group selection ended. Visual rect bounds:', {
+      left, top, right, bottom,
+      width: parseInt(selectionRect.style.width),
+      height: parseInt(selectionRect.style.height),
+      rendered: { x: rect.left, y: rect.top, width: rect.width, height: rect.height }
+    });
+
+    // Hide selection rectangle
+    selectionRect.style.display = 'none';
+
+    // Find all boxes within selection rectangle
+    const selectedBoxes = [];
+    const headerRegion = document.getElementById('headerRegion');
+    const mainRegion = document.getElementById('mainRegion');
+    const footerRegion = document.getElementById('footerRegion');
+
+    const checkBoxes = (boxArray, region, regionElement) => {
+      boxArray.forEach(box => {
+        // Adjust box coordinates based on region offset
+        // This accounts for header/footer size changes since offsetTop is dynamic
+        const regionOffset = regionElement ? regionElement.offsetTop : 0;
+        const adjustedBoxY = box.y + regionOffset;
+        const adjustedBoxX = box.x; // X doesn't need adjustment, regions don't offset horizontally
+
+        // Use <= and >= to include boxes that touch the edge of the selection
+        const boxInBounds = adjustedBoxX <= right && adjustedBoxX + box.width >= left &&
+            adjustedBoxY <= bottom && adjustedBoxY + box.height >= top;
+
+        console.log(`Checking Box ${box.id} in ${region}. Original: x=${box.x}, y=${box.y}. Adjusted: x=${adjustedBoxX}, y=${adjustedBoxY}. In selection? ${boxInBounds} (selection: left=${left}, top=${top}, right=${right}, bottom=${bottom})`);
+
+        if (boxInBounds) {
+          selectedBoxes.push(box);
+        }
+      });
+    };
+
+    // Check header, main, and footer boxes
+    checkBoxes(state.header.boxes, 'header', headerRegion);
+    checkBoxes(state.footer.boxes, 'footer', footerRegion);
+    const currentPage = getCurrentPage();
+    if (currentPage) checkBoxes(currentPage.boxes, 'page', mainRegion);
+
+    console.log(`Total boxes selected: ${selectedBoxes.length}`);
+
+    // Update temp group
+    state.tempGroup = selectedBoxes;
+
+    // Apply visual indicators
+    updateGroupVisualsOnCanvas();
+
+    console.log('Group selection complete. Temp group size:', state.tempGroup.length);
+
+    // Exit selection mode
+    state.groupSelectMode = false;
+    const btn = document.getElementById('createGroupBtn');
+    btn.style.background = '#fff';
+    btn.style.color = '#000';
+    canvas.style.cursor = 'default';
+  }
+
+  document.addEventListener('mousemove', onMouseMove);
+  document.addEventListener('mouseup', onMouseUp);
 });
 
 // Prevent default context menu on boxes (only in Design mode)
@@ -131,6 +297,33 @@ updateModeUI();
 // Update UI with version number
 document.title = `QuickBox v${APP_VERSION} - Wireframe Mockup Tool`;
 document.getElementById('appTitle').textContent = `QuickBox v${APP_VERSION}`;
+
+// @agent:GroupSelection:authority
+// Cleanup handlers for temporary groups
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && state.tempGroup.length > 0) {
+    clearTempGroup();
+  }
+});
+
+// Clear temp group when clicking outside canvas (but not on UI elements)
+document.addEventListener('click', (e) => {
+  if (state.tempGroup.length > 0 && !canvas.contains(e.target)) {
+    // Don't clear if clicking on toolbar, navigator, or menu editor
+    const toolbar = document.getElementById('toolbar');
+    const navigator = document.getElementById('navigatorPanel');
+    const menuEditor = document.getElementById('menuEditorPanel');
+
+    if ((toolbar && toolbar.contains(e.target)) ||
+        (navigator && navigator.contains(e.target)) ||
+        (menuEditor && menuEditor.contains(e.target))) {
+      console.log('Click on UI element, not clearing temp group');
+      return;
+    }
+
+    clearTempGroup();
+  }
+});
 
 // @agent:ModeToggle:authority
 // Mode Management
@@ -646,6 +839,45 @@ function selectBox(box) {
   }
 }
 
+// @agent:GroupSelection:authority
+// Helper functions for group selection
+function updateGroupVisualsOnCanvas() {
+  console.log('Updating group visuals for', state.tempGroup.length, 'boxes');
+
+  // Remove all group indicators first
+  document.querySelectorAll('.in-temp-group').forEach(el => el.classList.remove('in-temp-group'));
+
+  // Add visual indicator to all boxes in temp group
+  state.tempGroup.forEach(box => {
+    const boxEl = document.getElementById(box.id);
+    if (boxEl) {
+      console.log('Adding visual indicator to box:', box.id);
+      boxEl.classList.add('in-temp-group');
+    } else {
+      console.log('WARNING: Could not find element for box:', box.id);
+    }
+  });
+
+  console.log('Group visuals updated');
+}
+
+function clearTempGroup() {
+  console.log('Clearing temp group. Was', state.tempGroup.length, 'boxes');
+
+  state.tempGroup = [];
+  state.groupSelectMode = false;
+  document.querySelectorAll('.in-temp-group').forEach(el => el.classList.remove('in-temp-group'));
+
+  const btn = document.getElementById('createGroupBtn');
+  if (btn) {
+    btn.style.background = '#fff';
+    btn.style.color = '#000';
+  }
+  canvas.style.cursor = 'default';
+
+  console.log('Temp group cleared');
+}
+
 // @agent:MenuEditor:authority
 // Menu Editor Functions
 let currentEditingMenu = null;
@@ -1075,11 +1307,30 @@ function setupRegionDividers() {
   }
 }
 
-// @agent:DragDrop:authority
-// Drag functionality
+// @agent:DragDrop:extension
+// Drag functionality with group support
 function startDrag(e, box) {
   e.preventDefault();
 
+  console.log('Drag started on box:', box.id);
+  console.log('Current tempGroup size:', state.tempGroup.length);
+
+  // Check if this box is in a group
+  const isInGroup = state.tempGroup.some(b => b.id === box.id);
+  console.log('Box is in group:', isInGroup);
+
+  if (isInGroup && state.tempGroup.length > 1) {
+    // Group drag mode
+    console.log('Starting GROUP drag with', state.tempGroup.length, 'boxes');
+    startGroupDrag(e, box);
+  } else {
+    // Single box drag mode
+    console.log('Starting SINGLE drag');
+    startSingleDrag(e, box);
+  }
+}
+
+function startSingleDrag(e, box) {
   // Find box and its current region
   const boxInfo = findBoxInRegions(box.id);
   if (!boxInfo) return;
@@ -1165,6 +1416,118 @@ function startDrag(e, box) {
     } else {
       updateCanvasHeight();
     }
+  }
+
+  document.addEventListener('mousemove', onMouseMove);
+  document.addEventListener('mouseup', onMouseUp);
+}
+
+// @agent:DragDrop:extension
+// Group drag mode - drag all boxes in temp group together
+function startGroupDrag(e, draggedBox) {
+  console.log('Group drag started with', state.tempGroup.length, 'boxes');
+
+  let startX = e.clientX;
+  let startY = e.clientY;
+
+  console.log('Initial mouse position:', { startX, startY });
+
+  // Store initial positions for all boxes in group
+  const initialPositions = state.tempGroup.map(box => ({
+    id: box.id,
+    x: box.x,
+    y: box.y,
+    region: findBoxInRegions(box.id).region
+  }));
+
+  console.log('Initial positions stored:', initialPositions);
+
+  function onMouseMove(e) {
+    const deltaX = e.clientX - startX;
+    const deltaY = e.clientY - startY;
+
+    if (deltaX !== 0 || deltaY !== 0) {
+      console.log('Moving group by delta:', { deltaX, deltaY });
+    }
+
+    // Move all boxes in group by same delta
+    state.tempGroup.forEach(box => {
+      box.x += deltaX;
+      box.y += deltaY;
+      const boxEl = document.getElementById(box.id);
+      if (boxEl) {
+        boxEl.style.left = box.x + 'px';
+        boxEl.style.top = box.y + 'px';
+      }
+    });
+
+    // Update start position for next movement
+    startX = e.clientX;
+    startY = e.clientY;
+    initialPositions.forEach((pos, idx) => {
+      pos.x = state.tempGroup[idx].x;
+      pos.y = state.tempGroup[idx].y;
+    });
+  }
+
+  function onMouseUp() {
+    console.log('Group drag ended');
+
+    document.removeEventListener('mousemove', onMouseMove);
+    document.removeEventListener('mouseup', onMouseUp);
+
+    // Detect region of dragged box and transfer entire group if needed
+    const draggedInfo = findBoxInRegions(draggedBox.id);
+    if (draggedInfo) {
+      const draggedBoxEl = document.getElementById(draggedBox.id);
+      const draggedRect = draggedBoxEl.getBoundingClientRect();
+      const detectedRegion = detectRegion(draggedRect.top);
+
+      console.log('Detected region for dragged box:', detectedRegion);
+
+      // Check if we're trying to edit header/footer and not on Page 1
+      const isPage1 = state.currentPageId === 'page-1';
+      const movingToHeaderFooter = detectedRegion === 'header' || detectedRegion === 'footer';
+
+      if (!isPage1 && movingToHeaderFooter) {
+        console.log('ERROR: Trying to move group to header/footer on non-Page-1. Snapping back.');
+
+        // Snap back all boxes to original position
+        state.tempGroup.forEach((box, idx) => {
+          box.x = initialPositions[idx].x;
+          box.y = initialPositions[idx].y;
+          const boxEl = document.getElementById(box.id);
+          if (boxEl) {
+            boxEl.style.left = box.x + 'px';
+            boxEl.style.top = box.y + 'px';
+          }
+        });
+        alert('Header and footer can only be edited on Page 1');
+        return;
+      }
+
+      // Transfer all boxes in group if region changed
+      let anyTransferred = false;
+      state.tempGroup.forEach((box, idx) => {
+        const boxInfo = findBoxInRegions(box.id);
+        if (boxInfo && boxInfo.region !== detectedRegion) {
+          console.log('Transferring box', box.id, 'from', boxInfo.region, 'to', detectedRegion);
+          transferBoxToRegion(box, boxInfo.region, boxInfo.array, detectedRegion);
+          anyTransferred = true;
+        }
+      });
+
+      if (anyTransferred) {
+        console.log('Boxes transferred, re-rendering');
+        renderCurrentPage();
+        updateNavigator();
+      }
+
+      updateCanvasHeight();
+    }
+
+    // Clear temp group after drag
+    clearTempGroup();
   }
 
   document.addEventListener('mousemove', onMouseMove);
@@ -1323,13 +1686,11 @@ function updatePagesList() {
 // Edit page name
 function editPageName(page) {
   const currentName = page.name;
-  const prefix = 'Page ';
-  const suffix = currentName.startsWith(prefix) ? currentName.substring(prefix.length) : currentName;
 
-  const newSuffix = prompt(`Edit page name:\n\nPage `, suffix);
-  if (newSuffix === null || newSuffix.trim() === '') return;
+  const newName = prompt(`Edit page name:`, currentName);
+  if (newName === null || newName.trim() === '') return;
 
-  page.name = prefix + newSuffix.trim();
+  page.name = newName.trim();
   updatePagesList();
   updatePageIdentifier();
 }
@@ -1544,6 +1905,9 @@ function switchToPage(pageId) {
   const fromPageId = state.currentPageId;
   state.currentPageId = pageId;
   state.selectedBox = null;
+
+  // Clear temp group when switching pages
+  clearTempGroup();
 
   // DEBUG - can be removed later
   console.log('Page switched:', fromPageId, 'to', pageId);

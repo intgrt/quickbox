@@ -673,3 +673,21 @@ label {
 .child-menu-item {
   font-size: 13px;
 }
+
+/* @agent:GroupSelection:authority */
+/* Selection Rectangle for Group Selection */
+.selection-rectangle {
+  position: absolute;
+  border: 2px dashed #0066ff;
+  background: rgba(0, 102, 255, 0.15);
+  pointer-events: none;
+  z-index: 998;
+  display: none;
+  box-sizing: border-box;
+}
+
+/* Group Member Visual Indicator */
+.in-temp-group {
+  outline: 3px dashed #0066ff !important;
+  outline-offset: -2px;
+}
