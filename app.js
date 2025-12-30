@@ -489,6 +489,20 @@ function renderBox(box, region = 'main') {
       img.src = box.content;
       content.appendChild(img);
     }
+
+    // @agent:ImageBoxManagement:authority - Change Image icon in Design mode
+    if (state.currentMode === 'design') {
+      const changeImageIcon = document.createElement('div');
+      changeImageIcon.className = 'image-change-icon';
+      changeImageIcon.textContent = '📷';
+      changeImageIcon.title = 'Change Image';
+      changeImageIcon.addEventListener('click', (e) => {
+        e.stopPropagation(); // Prevent box selection
+        selectBox(box); // Ensure box is selected for upload handler
+        imageInput.click(); // Trigger file dialog
+      });
+      boxEl.appendChild(changeImageIcon);
+    }
   } else if (box.type === 'menu') {
     content.contentEditable = false;
     renderMenuContent(content, box);
