@@ -5,8 +5,8 @@ const APP_VERSION = "0.9";
 // @agent:AppConfig:authority
 // Configurable Constants
 // Button element defaults
-const BUTTON_DEFAULT_WIDTH = 80;
-const BUTTON_DEFAULT_HEIGHT = 50;
+const BUTTON_DEFAULT_WIDTH = 130;
+const BUTTON_DEFAULT_HEIGHT = 30;
 const BUTTON_BORDER_RADIUS = 8;
 
 // @agent:StateManagement:authority
@@ -186,6 +186,14 @@ const addChildMenuItemBtn = document.getElementById('addChildMenuItemBtn');
 const saveMenuBtn = document.getElementById('saveMenuBtn');
 const closeMenuEditorBtn = document.getElementById('closeMenuEditorBtn');
 
+// @agent:AccordionManagement:authority
+// Accordion editor elements
+const accordionEditorPanel = document.getElementById('accordionEditorPanel');
+const accordionItemsList = document.getElementById('accordionItemsList');
+const addAccordionItemBtn = document.getElementById('addAccordionItemBtn');
+const saveAccordionBtn = document.getElementById('saveAccordionBtn');
+const closeAccordionEditorBtn = document.getElementById('closeAccordionEditorBtn');
+
 // Toolbar buttons
 const newBtn = document.getElementById('newBtn');
 const openBtn = document.getElementById('openBtn');
@@ -194,6 +202,7 @@ const addTextBtn = document.getElementById('addTextBtn');
 const addImageBtn = document.getElementById('addImageBtn');
 const addMenuBtn = document.getElementById('addMenuBtn');
 const addButtonBtn = document.getElementById('addButtonBtn');
+const addAccordionBtn = document.getElementById('addAccordionBtn');
 const deleteBtn = document.getElementById('deleteBtn');
 const fontSelect = document.getElementById('fontSelect');
 const fontSizeSelect = document.getElementById('fontSizeSelect');
@@ -215,6 +224,7 @@ addTextBtn.addEventListener('click', () => addBox('text'));
 addImageBtn.addEventListener('click', () => addBox('image'));
 addMenuBtn.addEventListener('click', () => addBox('menu'));
 addButtonBtn.addEventListener('click', () => addBox('button'));
+addAccordionBtn.addEventListener('click', () => addBox('accordion'));
 deleteBtn.addEventListener('click', deleteSelectedBox);
 fontSelect.addEventListener('change', updateFont);
 fontSizeSelect.addEventListener('change', updateFontSize);
@@ -232,6 +242,12 @@ addMenuItemBtn.addEventListener('click', addMenuItem);
 addChildMenuItemBtn.addEventListener('click', addChildMenuItem);
 saveMenuBtn.addEventListener('click', saveMenu);
 closeMenuEditorBtn.addEventListener('click', closeMenuEditor);
+
+// @agent:AccordionManagement:authority
+// Accordion editor event listeners
+addAccordionItemBtn.addEventListener('click', addAccordionItem);
+saveAccordionBtn.addEventListener('click', saveAccordion);
+closeAccordionEditorBtn.addEventListener('click', closeAccordionEditor);
 
 // Create Group button
 document.getElementById('createGroupBtn').addEventListener('click', () => {
@@ -522,6 +538,7 @@ function addBox(type) {
   else if (type === 'image') boxName = `Image ${state.boxCounter}`;
   else if (type === 'menu') boxName = `Menu ${state.boxCounter}`;
   else if (type === 'button') boxName = `Button ${state.boxCounter}`;
+  else if (type === 'accordion') boxName = `Accordion ${state.boxCounter}`;
 
   // Calculate position based on number of boxes on current page (not boxCounter)
   // This keeps new boxes visible on the canvas
@@ -536,8 +553,8 @@ function addBox(type) {
     type: type,
     x: positionX,
     y: positionY,
-    width: type === 'menu' ? 400 : type === 'button' ? BUTTON_DEFAULT_WIDTH : 200,
-    height: type === 'menu' ? 50 : type === 'button' ? BUTTON_DEFAULT_HEIGHT : type === 'text' ? 30 : 150,
+    width: type === 'menu' ? 400 : type === 'button' ? BUTTON_DEFAULT_WIDTH : type === 'accordion' ? 350 : 200,
+    height: type === 'menu' ? 50 : type === 'button' ? BUTTON_DEFAULT_HEIGHT : type === 'accordion' ? 120 : type === 'text' ? 30 : 150,
     zIndex: state.zIndexCounter++,
     content: '',
     fontSize: '16',
@@ -566,6 +583,31 @@ function addBox(type) {
         text: 'Contact',
         linkTo: null,
         children: []
+      }
+    ];
+  }
+
+  // @agent:AccordionManagement:authority
+  // Accordion-specific properties (multi-item array structure)
+  if (type === 'accordion') {
+    box.accordionItems = [
+      {
+        id: `accordion-item-${Date.now()}-0`,
+        title: 'Question 1',
+        body: 'Answer to question 1',
+        isExpanded: false
+      },
+      {
+        id: `accordion-item-${Date.now()}-1`,
+        title: 'Question 2',
+        body: 'Answer to question 2',
+        isExpanded: false
+      },
+      {
+        id: `accordion-item-${Date.now()}-2`,
+        title: 'Question 3',
+        body: 'Answer to question 3',
+        isExpanded: false
       }
     ];
   }
@@ -600,6 +642,7 @@ function renderBox(box, region = 'main') {
   boxEl.className = 'box';
   if (box.type === 'menu') boxEl.classList.add('menu-box');
   if (box.type === 'button') boxEl.classList.add('button-box');
+  if (box.type === 'accordion') boxEl.classList.add('accordion-box');
   boxEl.id = box.id;
   boxEl.style.left = box.x + 'px';
   boxEl.style.top = box.y + 'px';
@@ -695,6 +738,23 @@ function renderBox(box, region = 'main') {
       editIcon.addEventListener('click', (e) => {
         e.stopPropagation(); // Prevent box selection
         openMenuEditor(box);
+      });
+      boxEl.appendChild(editIcon);
+    }
+  } else if (box.type === 'accordion') {
+    // @agent:AccordionManagement:authority
+    content.contentEditable = false;
+    renderAccordionContent(content, box);
+
+    // Design mode: Add edit icon (like menu boxes)
+    if (state.currentMode === 'design') {
+      const editIcon = document.createElement('div');
+      editIcon.className = 'accordion-edit-icon';
+      editIcon.textContent = '✏️';
+      editIcon.title = 'Edit Accordion';
+      editIcon.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openAccordionEditor(box);
       });
       boxEl.appendChild(editIcon);
     }
@@ -984,6 +1044,77 @@ function renderMenuContent(content, box) {
         e.stopPropagation();
       }
     });
+  });
+}
+
+// @agent:AccordionManagement:authority
+// Render Accordion Content
+function renderAccordionContent(content, box) {
+  content.innerHTML = '';
+  content.className = 'box-content accordion-content';
+  content.style.display = 'flex';
+  content.style.flexDirection = 'column';
+  content.style.gap = '0';
+
+  if (!box.accordionItems || box.accordionItems.length === 0) {
+    const placeholder = document.createElement('div');
+    placeholder.textContent = 'No accordion items. Click ✏️ to edit.';
+    placeholder.style.padding = '20px';
+    placeholder.style.textAlign = 'center';
+    placeholder.style.color = '#999';
+    content.appendChild(placeholder);
+    return;
+  }
+
+  box.accordionItems.forEach((item, index) => {
+    // Create item container
+    const itemContainer = document.createElement('div');
+    itemContainer.className = 'accordion-item-container';
+    itemContainer.dataset.itemId = item.id;
+
+    // Create header
+    const header = document.createElement('div');
+    header.className = 'accordion-header';
+
+    // Indicator (LEFT side)
+    const indicator = document.createElement('span');
+    indicator.className = 'accordion-indicator';
+    indicator.textContent = item.isExpanded ? '−' : '+';
+
+    // Title
+    const titleText = document.createElement('span');
+    titleText.className = 'accordion-title-text';
+    titleText.textContent = item.title;
+    titleText.style.fontSize = box.fontSize + 'px';
+    titleText.style.fontFamily = box.fontFamily;
+
+    // Append: INDICATOR FIRST, then title
+    header.appendChild(indicator);
+    header.appendChild(titleText);
+
+    // Create body
+    const body = document.createElement('div');
+    body.className = 'accordion-body';
+    body.style.display = item.isExpanded ? 'block' : 'none';
+    body.textContent = item.body;
+    body.style.fontSize = box.fontSize + 'px';
+    body.style.fontFamily = box.fontFamily;
+
+    // Toggle logic (works in both design and navigate modes)
+    header.addEventListener('click', (e) => {
+      e.stopPropagation();
+
+      // Toggle current item
+      item.isExpanded = !item.isExpanded;
+      indicator.textContent = item.isExpanded ? '−' : '+';
+      body.style.display = item.isExpanded ? 'block' : 'none';
+
+      pushHistory();
+    });
+
+    itemContainer.appendChild(header);
+    itemContainer.appendChild(body);
+    content.appendChild(itemContainer);
   });
 }
 
@@ -1315,6 +1446,154 @@ function moveMenuItem(itemId, targetItemId) {
     
     renderMenuEditor();
   }
+}
+
+// @agent:AccordionManagement:authority
+// Accordion Editor Functions
+let currentAccordionBox = null;
+
+function openAccordionEditor(box) {
+  if (box.type !== 'accordion') return;
+
+  currentAccordionBox = box;
+  accordionEditorPanel.classList.remove('hidden');
+  renderAccordionEditor();
+
+  console.log('Accordion editor opened for:', box.id);
+}
+
+function closeAccordionEditor() {
+  currentAccordionBox = null;
+  accordionEditorPanel.classList.add('hidden');
+  accordionItemsList.innerHTML = '';
+
+  console.log('Accordion editor closed');
+}
+
+function renderAccordionEditor() {
+  if (!currentAccordionBox) return;
+
+  accordionItemsList.innerHTML = '';
+
+  if (!currentAccordionBox.accordionItems) {
+    currentAccordionBox.accordionItems = [];
+  }
+
+  currentAccordionBox.accordionItems.forEach((item, index) => {
+    const itemDiv = document.createElement('div');
+    itemDiv.className = 'accordion-editor-item';
+    itemDiv.dataset.itemId = item.id;
+
+    // Title input
+    const titleLabel = document.createElement('label');
+    titleLabel.textContent = 'Question:';
+    const titleInput = document.createElement('input');
+    titleInput.type = 'text';
+    titleInput.value = item.title;
+    titleInput.className = 'accordion-item-title-input';
+    titleInput.addEventListener('input', (e) => {
+      item.title = e.target.value;
+    });
+
+    // Body textarea
+    const bodyLabel = document.createElement('label');
+    bodyLabel.textContent = 'Answer:';
+    const bodyTextarea = document.createElement('textarea');
+    bodyTextarea.value = item.body;
+    bodyTextarea.className = 'accordion-item-body-textarea';
+    bodyTextarea.rows = 3;
+    bodyTextarea.addEventListener('input', (e) => {
+      item.body = e.target.value;
+    });
+
+    // Move up/down buttons
+    const moveUpBtn = document.createElement('button');
+    moveUpBtn.textContent = '↑';
+    moveUpBtn.disabled = index === 0;
+    moveUpBtn.addEventListener('click', () => moveAccordionItem(index, index - 1));
+
+    const moveDownBtn = document.createElement('button');
+    moveDownBtn.textContent = '↓';
+    moveDownBtn.disabled = index === currentAccordionBox.accordionItems.length - 1;
+    moveDownBtn.addEventListener('click', () => moveAccordionItem(index, index + 1));
+
+    // Delete button
+    const deleteBtn = document.createElement('button');
+    deleteBtn.textContent = 'Delete';
+    deleteBtn.addEventListener('click', () => deleteAccordionItem(index));
+
+    const controls = document.createElement('div');
+    controls.className = 'accordion-item-controls';
+    controls.appendChild(moveUpBtn);
+    controls.appendChild(moveDownBtn);
+    controls.appendChild(deleteBtn);
+
+    itemDiv.appendChild(titleLabel);
+    itemDiv.appendChild(titleInput);
+    itemDiv.appendChild(bodyLabel);
+    itemDiv.appendChild(bodyTextarea);
+    itemDiv.appendChild(controls);
+
+    accordionItemsList.appendChild(itemDiv);
+  });
+}
+
+function addAccordionItem() {
+  if (!currentAccordionBox) return;
+
+  const newItem = {
+    id: `accordion-item-${Date.now()}-${currentAccordionBox.accordionItems.length}`,
+    title: `Question ${currentAccordionBox.accordionItems.length + 1}`,
+    body: `Answer to question ${currentAccordionBox.accordionItems.length + 1}`,
+    isExpanded: false
+  };
+
+  currentAccordionBox.accordionItems.push(newItem);
+  renderAccordionEditor();
+
+  console.log('Accordion item added:', newItem.id);
+}
+
+function deleteAccordionItem(index) {
+  if (!currentAccordionBox) return;
+
+  const item = currentAccordionBox.accordionItems[index];
+  currentAccordionBox.accordionItems.splice(index, 1);
+  renderAccordionEditor();
+
+  console.log('Accordion item deleted:', item.id);
+}
+
+function moveAccordionItem(fromIndex, toIndex) {
+  if (!currentAccordionBox) return;
+
+  const items = currentAccordionBox.accordionItems;
+  const [movedItem] = items.splice(fromIndex, 1);
+  items.splice(toIndex, 0, movedItem);
+  renderAccordionEditor();
+
+  console.log('Accordion item moved:', fromIndex, '->', toIndex);
+}
+
+function saveAccordion() {
+  if (!currentAccordionBox) return;
+
+  // @agent:UndoSystem:extension
+  pushHistory(); // Capture state before accordion save
+
+  // Re-render the accordion box
+  const boxEl = document.getElementById(currentAccordionBox.id);
+  if (boxEl) {
+    const content = boxEl.querySelector('.box-content');
+    if (content) {
+      renderAccordionContent(content, currentAccordionBox);
+    }
+  }
+
+  updateNavigator();
+  closeAccordionEditor();
+
+  console.log('Accordion saved:', currentAccordionBox.id);
 }
 
 // @agent:RegionManagement:authority
@@ -2047,6 +2326,7 @@ function editElementName(box) {
   else if (box.type === 'image') prefix = 'Image ';
   else if (box.type === 'menu') prefix = 'Menu ';
   else if (box.type === 'button') prefix = 'Button ';
+  else if (box.type === 'accordion') prefix = 'Accordion ';
 
   const suffix = currentName.startsWith(prefix) ? currentName.substring(prefix.length) : currentName;
 

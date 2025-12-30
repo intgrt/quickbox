@@ -723,3 +723,242 @@ label {
   outline: 3px dashed #0066ff !important;
   outline-offset: -2px;
 }
+
+/* @agent:AccordionManagement:authority */
+/* Accordion Box Styles */
+.box.accordion-box {
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* @agent:AccordionManagement:authority */
+/* Accordion Box Styles */
+.box.accordion-box {
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.accordion-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  overflow: auto;
+}
+
+.accordion-item-container {
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.accordion-item-container:last-child {
+  border-bottom: none;
+}
+
+.accordion-header {
+  cursor: pointer;
+  padding: 10px;
+  background: #f0f0f0;
+  border-bottom: 1px solid #ccc;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  user-select: none;
+  transition: background-color 0.2s;
+}
+
+.accordion-header:hover {
+  background: #e8e8e8;
+}
+
+.accordion-indicator {
+  font-size: 18px;
+  font-weight: bold;
+  min-width: 20px;
+  text-align: center;
+  margin-right: 10px;
+  transition: transform 0.2s;
+}
+
+.accordion-title-text {
+  flex: 1;
+  font-weight: bold;
+  word-wrap: break-word;
+  white-space: pre-wrap;
+}
+
+.accordion-body {
+  padding: 15px;
+  display: none;
+  word-wrap: break-word;
+  white-space: pre-wrap;
+  background: #fafafa;
+}
+
+/* Navigate mode cursor */
+.navigate-mode .accordion-header {
+  cursor: pointer;
+}
+
+/* Accordion Edit Icon */
+.accordion-edit-icon {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  background: rgba(0, 0, 0, 0.7);
+  border: 1px solid #fff;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  cursor: pointer;
+  z-index: 10;
+  user-select: none;
+  transition: background-color 0.2s, transform 0.2s;
+}
+
+.accordion-edit-icon:hover {
+  background: rgba(0, 0, 0, 0.9);
+  transform: scale(1.1);
+}
+
+.navigate-mode .accordion-edit-icon {
+  display: none !important;
+}
+
+/* Accordion Editor Panel */
+#accordionEditorPanel {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: #fff;
+  border: 2px solid #333;
+  box-shadow: 4px 4px 0 #333;
+  padding: 20px;
+  z-index: 1001;
+  width: 500px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+#accordionEditorPanel.hidden {
+  display: none !important;
+}
+
+#accordionEditorPanel h3 {
+  margin-top: 0;
+  font-size: 18px;
+  border-bottom: 2px solid #333;
+  padding-bottom: 10px;
+}
+
+.accordion-editor-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.accordion-editor-header button {
+  padding: 6px 12px;
+  background: #f0f0f0;
+  border: 1px solid #ccc;
+  cursor: pointer;
+}
+
+.accordion-editor-header button:hover {
+  background: #e0e0e0;
+}
+
+.accordion-items-list {
+  margin: 15px 0;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.accordion-editor-item {
+  border: 1px solid #ccc;
+  padding: 10px;
+  margin-bottom: 10px;
+  background: #f9f9f9;
+}
+
+.accordion-editor-item label {
+  display: block;
+  font-weight: bold;
+  margin-top: 8px;
+  margin-bottom: 4px;
+}
+
+.accordion-item-title-input {
+  width: 100%;
+  padding: 6px;
+  border: 1px solid #ccc;
+  font-family: 'Architects Daughter', cursive;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+.accordion-item-body-textarea {
+  width: 100%;
+  padding: 6px;
+  border: 1px solid #ccc;
+  font-family: 'Architects Daughter', cursive;
+  font-size: 14px;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.accordion-item-controls {
+  display: flex;
+  gap: 5px;
+  margin-top: 8px;
+}
+
+.accordion-item-controls button {
+  padding: 4px 8px;
+  font-size: 12px;
+  background: #f0f0f0;
+  border: 1px solid #ccc;
+  cursor: pointer;
+}
+
+.accordion-item-controls button:hover {
+  background: #e0e0e0;
+}
+
+.accordion-item-controls button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.accordion-editor-controls {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 15px;
+  padding-top: 15px;
+  border-top: 1px solid #ccc;
+}
+
+.accordion-editor-controls button {
+  padding: 8px 16px;
+  background: #f0f0f0;
+  border: 1px solid #ccc;
+  cursor: pointer;
+  font-family: 'Architects Daughter', cursive;
+}
+
+.accordion-editor-controls button:hover {
+  background: #e0e0e0;
+}
