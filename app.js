@@ -1,6 +1,6 @@
 // QuickBox - Wireframe Mockup Tool
 // Version
-const APP_VERSION = "0.8";
+const APP_VERSION = "0.8.1";
 
 // @agent:AppConfig:authority
 // Configurable Constants
@@ -1881,6 +1881,71 @@ function deleteSelectedBox() {
   updateCanvasHeight();
 }
 
+// @agent:BoxManagement:authority
+// Duplicate Box
+function duplicateBox(sourceBox) {
+  console.log('Duplicating box:', sourceBox.id, sourceBox.name);
+
+  // Find source region
+  const boxInfo = findBoxInRegions(sourceBox.id);
+  if (!boxInfo) {
+    console.log('Could not find box in regions');
+    return;
+  }
+
+  // Check region edit restrictions (header/footer on non-Page-1)
+  const isPage1 = state.currentPageId === 'page-1';
+  const isHeaderFooter = boxInfo.region === 'header' || boxInfo.region === 'footer';
+  if (!isPage1 && isHeaderFooter) {
+    alert('Header and footer boxes can only be duplicated on Page 1');
+    return;
+  }
+
+  // Increment counter and create new ID
+  state.boxCounter++;
+  const newBoxId = `box-${state.boxCounter}`;
+
+  // Deep clone box
+  const newBox = JSON.parse(JSON.stringify(sourceBox));
+
+  // Update properties
+  newBox.id = newBoxId;
+  newBox.name = sourceBox.name + ' Copy';
+  newBox.x = sourceBox.x + 20;
+  newBox.y = sourceBox.y + 20;
+  newBox.zIndex = state.zIndexCounter++;
+  newBox.linkTo = null; // Clear link
+
+  // Handle menu boxes - regenerate menu item IDs
+  if (newBox.type === 'menu' && newBox.menuItems) {
+    newBox.menuItems = regenerateMenuItemIds(newBox.menuItems);
+  }
+
+  // Add to appropriate region array
+  boxInfo.array.push(newBox);
+
+  // Render, update navigator, select
+  renderBox(newBox, boxInfo.region);
+  updateNavigator();
+  selectBox(newBox);
+  updateCanvasHeight();
+
+  console.log('Box duplicated successfully:', newBoxId, newBox.name);
+}
+
+// @agent:MenuManagement:authority
+// Regenerate Menu Item IDs (for duplicated menu boxes)
+function regenerateMenuItemIds(menuItems) {
+  return menuItems.map(item => {
+    const newItem = { ...item };
+    newItem.id = `menu-item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    if (newItem.children && newItem.children.length > 0) {
+      newItem.children = regenerateMenuItemIds(newItem.children);
+    }
+    return newItem;
+  });
+}
+
 // @agent:PageManagement:authority
 // Page Management
 function addPage() {
@@ -2002,6 +2067,16 @@ function showContextMenu(e, boxId) {
     });
     contextMenu.appendChild(editMenuOption);
   }
+
+  // @agent:ContextMenu:extension - Duplicate option
+  const duplicateOption = document.createElement('div');
+  duplicateOption.className = 'context-menu-item';
+  duplicateOption.textContent = 'Duplicate';
+  duplicateOption.addEventListener('click', () => {
+    duplicateBox(box);
+    contextMenu.remove();
+  });
+  contextMenu.appendChild(duplicateOption);
 
   // Link to Page option
   const linkToPageOption = document.createElement('div');
