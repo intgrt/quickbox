@@ -258,7 +258,7 @@ document.getElementById('createGroupBtn').addEventListener('click', () => {
 
 // Canvas click to deselect
 canvas.addEventListener('click', (e) => {
-  if (e.target === canvas) {
+  if (e.target === canvas || !e.target.closest('.box')) {
     if (!state.groupSelectMode) {
       selectBox(null);
     }
