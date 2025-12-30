@@ -821,8 +821,9 @@ function selectBox(box) {
   if (box) {
     const boxEl = document.getElementById(box.id);
     boxEl.classList.add('selected');
-    box.zIndex = state.zIndexCounter++;
-    boxEl.style.zIndex = box.zIndex;
+    // NOTE: Removed auto-bring-to-front (was lines 824-825)
+    // Users now have explicit "Bring to Front" / "Send to Back" controls via context menu
+    // This prevents selection from disrupting intentional layer arrangements
 
     // Update font controls
     fontSelect.value = box.fontFamily;
@@ -1946,6 +1947,40 @@ function regenerateMenuItemIds(menuItems) {
   });
 }
 
+// @agent:BoxManagement:authority
+// Bring Box to Front
+function bringToFront(box) {
+  console.log('Bringing box to front:', box.id, box.name);
+
+  // Assign highest z-index
+  box.zIndex = state.zIndexCounter++;
+
+  // Update DOM
+  const boxEl = document.getElementById(box.id);
+  if (boxEl) {
+    boxEl.style.zIndex = box.zIndex;
+  }
+
+  console.log('Box now at z-index:', box.zIndex);
+}
+
+// @agent:BoxManagement:authority
+// Send Box to Back
+function sendToBack(box) {
+  console.log('Sending box to back:', box.id, box.name);
+
+  // Set to z-index 0 (below all normal boxes which start at 1)
+  box.zIndex = 0;
+
+  // Update DOM
+  const boxEl = document.getElementById(box.id);
+  if (boxEl) {
+    boxEl.style.zIndex = box.zIndex;
+  }
+
+  console.log('Box now at z-index:', box.zIndex);
+}
+
 // @agent:PageManagement:authority
 // Page Management
 function addPage() {
@@ -2077,6 +2112,26 @@ function showContextMenu(e, boxId) {
     contextMenu.remove();
   });
   contextMenu.appendChild(duplicateOption);
+
+  // @agent:ContextMenu:extension - Bring to Front option
+  const bringToFrontOption = document.createElement('div');
+  bringToFrontOption.className = 'context-menu-item';
+  bringToFrontOption.textContent = 'Bring to Front';
+  bringToFrontOption.addEventListener('click', () => {
+    bringToFront(box);
+    contextMenu.remove();
+  });
+  contextMenu.appendChild(bringToFrontOption);
+
+  // @agent:ContextMenu:extension - Send to Back option
+  const sendToBackOption = document.createElement('div');
+  sendToBackOption.className = 'context-menu-item';
+  sendToBackOption.textContent = 'Send to Back';
+  sendToBackOption.addEventListener('click', () => {
+    sendToBack(box);
+    contextMenu.remove();
+  });
+  contextMenu.appendChild(sendToBackOption);
 
   // Link to Page option
   const linkToPageOption = document.createElement('div');
