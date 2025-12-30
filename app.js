@@ -1884,7 +1884,7 @@ function updatePagesList() {
   state.pages.forEach(page => {
     const item = document.createElement('div');
     item.className = 'page-item';
-    item.textContent = page.name;
+    item.textContent = `${page.name} (${page.id})`;
     item.dataset.pageId = page.id;
     item.title = 'Right-click to rename';
 
@@ -1936,7 +1936,7 @@ function updateElementsList() {
     state.header.boxes.forEach(box => {
       const item = document.createElement('div');
       item.className = 'element-item' + (!isPage1 ? ' read-only' : '');
-      item.textContent = box.name;
+      item.textContent = `${box.name} (${box.id})`;
       item.dataset.boxId = box.id;
       item.title = isPage1 ? 'Right-click to rename' : 'Header (editable on Page 1 only)';
 
@@ -1971,7 +1971,7 @@ function updateElementsList() {
   currentPage.boxes.forEach(box => {
     const item = document.createElement('div');
     item.className = 'element-item';
-    item.textContent = box.name;
+    item.textContent = `${box.name} (${box.id})`;
     item.dataset.boxId = box.id;
     item.title = 'Right-click to rename';
 
@@ -2002,7 +2002,7 @@ function updateElementsList() {
     state.footer.boxes.forEach(box => {
       const item = document.createElement('div');
       item.className = 'element-item' + (!isPage1 ? ' read-only' : '');
-      item.textContent = box.name;
+      item.textContent = `${box.name} (${box.id})`;
       item.dataset.boxId = box.id;
       item.title = isPage1 ? 'Right-click to rename' : 'Footer (editable on Page 1 only)';
 
