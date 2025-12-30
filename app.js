@@ -1,6 +1,6 @@
 // QuickBox - Wireframe Mockup Tool
 // Version
-const APP_VERSION = "0.8.1";
+const APP_VERSION = "0.9";
 
 // @agent:AppConfig:authority
 // Configurable Constants
@@ -24,6 +24,133 @@ const state = {
   tempGroup: [], // Temporary group for dragging multiple boxes
   groupSelectMode: false // Flag for rectangle selection active
 };
+
+// @agent:UndoSystem:authority
+// Undo/Redo System Configuration
+const UNDO_HISTORY_SIZE = 10; // Change to 5 for fewer undo states - no code difference
+const COALESCE_TIMEOUT_MS = 500; // Debounce timeout for continuous operations (ms)
+
+// Undo history state
+const undoHistory = {
+  past: [],              // Array of previous state snapshots
+  future: [],            // Array for redo functionality
+  continuousOp: null,    // Flag: 'drag', 'resize', 'region-resize', or null
+  coalesceTimer: null    // Timer for debouncing continuous operations
+};
+
+// @agent:UndoSystem:authority
+// Capture current state as a JSON snapshot
+function captureSnapshot() {
+  return JSON.parse(JSON.stringify({
+    header: state.header,
+    footer: state.footer,
+    pages: state.pages,
+    currentPageId: state.currentPageId
+  }));
+}
+
+// @agent:UndoSystem:authority
+// Add snapshot to undo history (coalesces continuous operations)
+function pushHistory(operationType = 'discrete') {
+  // Skip snapshots during continuous operations (except on completion)
+  if (undoHistory.continuousOp && operationType !== 'continuous-end') {
+    return;
+  }
+
+  const snapshot = captureSnapshot();
+
+  // Coalesce continuous operations with debounce
+  if (operationType === 'continuous-end') {
+    clearTimeout(undoHistory.coalesceTimer);
+    undoHistory.coalesceTimer = setTimeout(() => {
+      undoHistory.past.push(snapshot);
+      if (undoHistory.past.length > UNDO_HISTORY_SIZE) {
+        undoHistory.past.shift(); // Remove oldest
+      }
+      undoHistory.future = []; // Clear redo stack
+      undoHistory.continuousOp = null;
+    }, COALESCE_TIMEOUT_MS);
+  } else {
+    // Discrete operations - immediate push
+    undoHistory.past.push(snapshot);
+    if (undoHistory.past.length > UNDO_HISTORY_SIZE) {
+      undoHistory.past.shift();
+    }
+    undoHistory.future = []; // Invalidate redo on new action
+  }
+}
+
+// @agent:UndoSystem:authority
+// Restore state from snapshot and re-render UI
+function restoreSnapshot(snapshot) {
+  // Restore serialized state
+  state.header = snapshot.header;
+  state.footer = snapshot.footer;
+  state.pages = snapshot.pages;
+  state.currentPageId = snapshot.currentPageId;
+
+  // Recalculate counters from max IDs (same pattern as openFile)
+  const allBoxes = state.pages.flatMap(p => p.boxes);
+  const headerFooterBoxes = [...state.header.boxes, ...state.footer.boxes];
+  const combinedBoxes = [...allBoxes, ...headerFooterBoxes];
+
+  if (combinedBoxes.length > 0) {
+    state.boxCounter = Math.max(...combinedBoxes.map(b => parseInt(b.id.split('-')[1])), 0);
+    state.zIndexCounter = Math.max(...combinedBoxes.map(b => b.zIndex), 0) + 1;
+  }
+
+  if (state.pages.length > 0) {
+    state.pageCounter = Math.max(...state.pages.map(p => parseInt(p.id.split('-')[1])), 0);
+  }
+
+  // Clear transient UI state
+  state.selectedBox = null;
+  clearTempGroup();
+  closeMenuEditor(); // Close stale editor if open
+
+  // Re-render everything
+  renderCurrentPage();
+  updateNavigator();
+  updatePageIdentifier();
+}
+
+// @agent:UndoSystem:authority
+// Perform undo - restore previous state
+function performUndo() {
+  if (undoHistory.past.length === 0) {
+    console.log('Nothing to undo');
+    return;
+  }
+
+  // Save current state to redo stack
+  const currentSnapshot = captureSnapshot();
+  undoHistory.future.push(currentSnapshot);
+
+  // Restore previous state
+  const previousSnapshot = undoHistory.past.pop();
+  restoreSnapshot(previousSnapshot);
+
+  console.log('Undo performed. Undo stack size:', undoHistory.past.length);
+}
+
+// @agent:UndoSystem:authority
+// Perform redo - restore next state
+function performRedo() {
+  if (undoHistory.future.length === 0) {
+    console.log('Nothing to redo');
+    return;
+  }
+
+  // Save current state to undo stack
+  const currentSnapshot = captureSnapshot();
+  undoHistory.past.push(currentSnapshot);
+
+  // Restore future state
+  const futureSnapshot = undoHistory.future.pop();
+  restoreSnapshot(futureSnapshot);
+
+  console.log('Redo performed. Undo stack size:', undoHistory.past.length);
+}
 
 // @agent:StateManagement:entry
 // Initialize with default page
@@ -294,15 +421,34 @@ renderCurrentPage();
 updatePageIdentifier();
 updateModeUI();
 
+// @agent:UndoSystem:extension
+// Capture initial state after DOM is ready
+setTimeout(() => {
+  pushHistory();
+}, 100);
+
 // Update UI with version number
 document.title = `QuickBox v${APP_VERSION} - Wireframe Mockup Tool`;
 document.getElementById('appTitle').textContent = `QuickBox v${APP_VERSION}`;
 
 // @agent:GroupSelection:authority
-// Cleanup handlers for temporary groups
+// @agent:UndoSystem:extension
+// Cleanup handlers for temporary groups and undo/redo
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && state.tempGroup.length > 0) {
     clearTempGroup();
+  }
+
+  // Ctrl+Z or Cmd+Z (Mac) - UNDO
+  if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+    e.preventDefault();
+    performUndo();
+  }
+
+  // Ctrl+Y or Ctrl+Shift+Z - REDO
+  if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+    e.preventDefault();
+    performRedo();
   }
 });
 
@@ -359,10 +505,14 @@ function updateModeUI() {
 }
 
 // @agent:BoxManagement:authority
+// @agent:UndoSystem:extension
 // Add Box
 function addBox(type) {
   const currentPage = getCurrentPage();
   if (!currentPage) return;
+
+  // @agent:UndoSystem:extension
+  pushHistory(); // Capture state before box creation
 
   state.boxCounter++;
   const boxId = `box-${state.boxCounter}`;
@@ -474,6 +624,13 @@ function renderBox(box, region = 'main') {
     content.textContent = box.content;
     content.style.fontSize = box.fontSize + 'px';
     content.style.fontFamily = box.fontFamily;
+
+    // @agent:UndoSystem:extension
+    // Capture state when text editing finishes (blur event)
+    content.addEventListener('blur', () => {
+      box.content = content.textContent;
+      pushHistory();
+    });
   } else if (box.type === 'button') {
     content.contentEditable = state.currentMode === 'design' ? 'true' : 'false';
     content.textContent = box.content;
@@ -482,6 +639,13 @@ function renderBox(box, region = 'main') {
     content.style.display = 'flex';
     content.style.alignItems = 'center';
     content.style.justifyContent = 'center';
+
+    // @agent:UndoSystem:extension
+    // Capture state when button text editing finishes (blur event)
+    content.addEventListener('blur', () => {
+      box.content = content.textContent;
+      pushHistory();
+    });
   } else if (box.type === 'image') {
     content.contentEditable = false;
     if (box.content) {
@@ -1077,8 +1241,12 @@ function showMenuItemLinkDialog(item) {
   renderMenuEditor();
 }
 
+// @agent:UndoSystem:extension
 function saveMenu() {
   if (!currentEditingMenu) return;
+
+  // @agent:UndoSystem:extension
+  pushHistory(); // Capture state before menu save
 
   // Update the menu box rendering
   const boxEl = document.getElementById(currentEditingMenu.id);
@@ -1236,8 +1404,13 @@ function transferBoxToRegion(box, sourceRegion, sourceArray, targetRegion) {
 }
 
 // @agent:RegionManagement:extension
+// @agent:UndoSystem:extension
 // Region divider drag functionality
 function startRegionDividerDrag(e, regionType) {
+  // @agent:UndoSystem:extension
+  // Mark continuous operation start
+  undoHistory.continuousOp = 'region-resize';
+
   // Only allow in design mode
   if (state.currentMode !== 'design') return;
 
@@ -1274,6 +1447,11 @@ function startRegionDividerDrag(e, regionType) {
   function onMouseUp() {
     document.removeEventListener('mousemove', onMouseMove);
     document.removeEventListener('mouseup', onMouseUp);
+
+    // @agent:UndoSystem:extension
+    // Mark continuous operation end
+    pushHistory('continuous-end');
+    undoHistory.continuousOp = null;
   }
 
   document.addEventListener('mousemove', onMouseMove);
@@ -1346,6 +1524,10 @@ function startDrag(e, box) {
 }
 
 function startSingleDrag(e, box) {
+  // @agent:UndoSystem:extension
+  // Mark continuous operation start
+  undoHistory.continuousOp = 'drag';
+
   // Find box and its current region
   const boxInfo = findBoxInRegions(box.id);
   if (!boxInfo) return;
@@ -1431,6 +1613,11 @@ function startSingleDrag(e, box) {
     } else {
       updateCanvasHeight();
     }
+
+    // @agent:UndoSystem:extension
+    // Mark continuous operation end
+    pushHistory('continuous-end');
+    undoHistory.continuousOp = null;
   }
 
   document.addEventListener('mousemove', onMouseMove);
@@ -1438,8 +1625,13 @@ function startSingleDrag(e, box) {
 }
 
 // @agent:DragDrop:extension
+// @agent:UndoSystem:extension
 // Group drag mode - drag all boxes in temp group together
 function startGroupDrag(e, draggedBox) {
+  // @agent:UndoSystem:extension
+  // Mark continuous operation start
+  undoHistory.continuousOp = 'drag';
+
   console.log('Group drag started with', state.tempGroup.length, 'boxes');
 
   let startX = e.clientX;
@@ -1541,6 +1733,11 @@ function startGroupDrag(e, draggedBox) {
       updateCanvasHeight();
     }
 
+    // @agent:UndoSystem:extension
+    // Mark continuous operation end
+    pushHistory('continuous-end');
+    undoHistory.continuousOp = null;
+
     // Clear temp group after drag
     clearTempGroup();
   }
@@ -1550,8 +1747,13 @@ function startGroupDrag(e, draggedBox) {
 }
 
 // @agent:BoxResize:authority
+// @agent:UndoSystem:extension
 // Resize functionality
 function startResize(e, box, direction) {
+  // @agent:UndoSystem:extension
+  // Mark continuous operation start
+  undoHistory.continuousOp = 'resize';
+
   e.preventDefault();
   const boxEl = document.getElementById(box.id);
   boxEl.classList.add('resizing');
@@ -1599,6 +1801,11 @@ function startResize(e, box, direction) {
     document.removeEventListener('mousemove', onMouseMove);
     document.removeEventListener('mouseup', onMouseUp);
     updateCanvasHeight();
+
+    // @agent:UndoSystem:extension
+    // Mark continuous operation end
+    pushHistory('continuous-end');
+    undoHistory.continuousOp = null;
   }
 
   document.addEventListener('mousemove', onMouseMove);
@@ -1851,12 +2058,16 @@ function editElementName(box) {
 }
 
 // @agent:BoxManagement:extension
+// @agent:UndoSystem:extension
 // Delete Selected Box
 function deleteSelectedBox() {
   if (!state.selectedBox) return;
 
   const currentPage = getCurrentPage();
   if (!currentPage) return;
+
+  // @agent:UndoSystem:extension
+  pushHistory(); // Capture state before deletion
 
   const boxEl = document.getElementById(state.selectedBox.id);
   if (boxEl) {
@@ -1897,9 +2108,13 @@ function deleteSelectedBox() {
 }
 
 // @agent:BoxManagement:authority
+// @agent:UndoSystem:extension
 // Duplicate Box
 function duplicateBox(sourceBox) {
   console.log('Duplicating box:', sourceBox.id, sourceBox.name);
+
+  // @agent:UndoSystem:extension
+  pushHistory(); // Capture state before duplication
 
   // Find source region
   const boxInfo = findBoxInRegions(sourceBox.id);
@@ -1962,9 +2177,13 @@ function regenerateMenuItemIds(menuItems) {
 }
 
 // @agent:BoxManagement:authority
+// @agent:UndoSystem:extension
 // Bring Box to Front
 function bringToFront(box) {
   console.log('Bringing box to front:', box.id, box.name);
+
+  // @agent:UndoSystem:extension
+  pushHistory(); // Capture state before z-index change
 
   // Assign highest z-index
   box.zIndex = state.zIndexCounter++;
@@ -1979,9 +2198,13 @@ function bringToFront(box) {
 }
 
 // @agent:BoxManagement:authority
+// @agent:UndoSystem:extension
 // Send Box to Back
 function sendToBack(box) {
   console.log('Sending box to back:', box.id, box.name);
+
+  // @agent:UndoSystem:extension
+  pushHistory(); // Capture state before z-index change
 
   // Set to z-index 0 (below all normal boxes which start at 1)
   box.zIndex = 0;
@@ -1996,8 +2219,12 @@ function sendToBack(box) {
 }
 
 // @agent:PageManagement:authority
+// @agent:UndoSystem:extension
 // Page Management
 function addPage() {
+  // @agent:UndoSystem:extension
+  pushHistory(); // Capture state before page creation
+
   state.pageCounter++;
   const newPage = {
     id: `page-${state.pageCounter}`,
@@ -2173,6 +2400,9 @@ function showContextMenu(e, boxId) {
     removeLinkOption.className = 'context-menu-item';
     removeLinkOption.textContent = 'Remove Link';
     removeLinkOption.addEventListener('click', () => {
+      // @agent:UndoSystem:extension
+      pushHistory(); // Capture state before link removal
+
       // DEBUG - can be removed later
       console.log('Link removed:', box.id);
 
@@ -2211,10 +2441,14 @@ function closeContextMenu() {
   document.removeEventListener('click', closeContextMenu);
 }
 
+// @agent:UndoSystem:extension
 function showPageLinkDialog(box) {
   const pageList = state.pages.map(p => `${p.name} (${p.id})`).join('\n');
   const targetPage = prompt(`Link to page:\n\n${pageList}\n\nEnter page ID:`, box.linkTo?.target || '');
   if (!targetPage) return;
+
+  // @agent:UndoSystem:extension
+  pushHistory(); // Capture state before link creation
 
   const pageId = targetPage;
   const page = state.pages.find(p => p.id === pageId);
@@ -2231,6 +2465,7 @@ function showPageLinkDialog(box) {
   }
 }
 
+// @agent:UndoSystem:extension
 function showAnchorLinkDialog(box) {
   const currentPage = getCurrentPage();
   if (!currentPage) return;
@@ -2239,6 +2474,9 @@ function showAnchorLinkDialog(box) {
   const targetBox = prompt(`Select a box to link to:\n\n${boxList}\n\nEnter box ID:`);
 
   if (!targetBox) return;
+
+  // @agent:UndoSystem:extension
+  pushHistory(); // Capture state before link creation
 
   const anchorBox = currentPage.boxes.find(b => b.id === targetBox);
 
@@ -2271,9 +2509,13 @@ function handleLinkClick(linkTo) {
   }
 }
 
+// @agent:UndoSystem:extension
 // Update Font
 function updateFont() {
   if (!state.selectedBox || (state.selectedBox.type !== 'text' && state.selectedBox.type !== 'button')) return;
+
+  // @agent:UndoSystem:extension
+  pushHistory(); // Capture state before font change
 
   state.selectedBox.fontFamily = fontSelect.value;
   const boxEl = document.getElementById(state.selectedBox.id);
@@ -2281,9 +2523,13 @@ function updateFont() {
   content.style.fontFamily = fontSelect.value;
 }
 
+// @agent:UndoSystem:extension
 // Update Font Size
 function updateFontSize() {
   if (!state.selectedBox || (state.selectedBox.type !== 'text' && state.selectedBox.type !== 'button')) return;
+
+  // @agent:UndoSystem:extension
+  pushHistory(); // Capture state before font size change
 
   state.selectedBox.fontSize = fontSizeSelect.value;
   const boxEl = document.getElementById(state.selectedBox.id);
@@ -2291,6 +2537,7 @@ function updateFontSize() {
   content.style.fontSize = fontSizeSelect.value + 'px';
 }
 
+// @agent:UndoSystem:extension
 // Handle Image Upload
 function handleImageUpload(e) {
   const file = e.target.files[0];
@@ -2299,6 +2546,9 @@ function handleImageUpload(e) {
   const reader = new FileReader();
   reader.onload = (event) => {
     if (state.selectedBox && state.selectedBox.type === 'image') {
+      // @agent:UndoSystem:extension
+      pushHistory(); // Capture state before image upload
+
       state.selectedBox.content = event.target.result;
       const boxEl = document.getElementById(state.selectedBox.id);
       const content = boxEl.querySelector('.box-content');
