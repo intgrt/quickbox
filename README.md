@@ -1,6 +1,6 @@
 # QuickBox
 
-**Version 0.8.1**
+**Version 0.10**
 
 A lightweight wireframe mockup tool for rapid web page prototyping.
 
@@ -17,7 +17,9 @@ A lightweight wireframe mockup tool for rapid web page prototyping.
 - Design and Navigate modes
 - Hand-drawn Balsamiq-style aesthetic
 - Group selection and drag (v0.8)
-- **NEW:** Duplicate element via context menu (v0.8.1)
+- Duplicate element via context menu (v0.8.1)
+- **NEW:** Fixed menu navigation across all pages (v0.10)
+- **IMPROVED:** Header/footer editing available from any page (v0.10)
 
 ## Usage
 
@@ -64,11 +66,11 @@ Open `index.html` in a web browser to start using QuickBox.
 
 ## File Format
 
-QuickBox v0.8.1 saves files in JSON format with the following structure:
+QuickBox v0.10 saves files in JSON format with the following structure:
 
 ```json
 {
-  "version": "0.8.1",
+  "version": "0.10",
   "header": {
     "boxes": [...],
     "height": 80
@@ -89,7 +91,7 @@ QuickBox v0.8.1 saves files in JSON format with the following structure:
 }
 ```
 
-**Note**: v0.8.1 files use the same format as v0.8 and v0.7. Files from v0.6 and earlier are not compatible due to header/footer structure changes.
+**Note**: v0.10 files are fully backward compatible with v0.7+ format. Files from v0.6 and earlier are not compatible due to header/footer structure changes. v0.10 maintains the same file format as previous versions with no breaking changes.
 
 ## License
 

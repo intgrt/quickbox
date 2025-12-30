@@ -1,6 +1,6 @@
 // QuickBox - Wireframe Mockup Tool
 // Version
-const APP_VERSION = "0.9";
+const APP_VERSION = "0.10";
 
 // @agent:AppConfig:authority
 // Configurable Constants
@@ -274,6 +274,26 @@ document.getElementById('createGroupBtn').addEventListener('click', () => {
 
 // Canvas click to deselect
 canvas.addEventListener('click', (e) => {
+  const targetBox = e.target.closest('.box');
+  const targetMenuContent = e.target.closest('.menu-content');
+  const targetMenuItem = e.target.closest('.menu-item');
+
+  // Enhanced logging to see element details
+  let elementPath = e.target.tagName;
+  if (e.target.className) elementPath += '.' + e.target.className.split(' ').join('.');
+  if (e.target.id) elementPath += '#' + e.target.id;
+  let parent = e.target.parentElement;
+  let parentPath = parent ? (parent.tagName + (parent.className ? '.' + parent.className.split(' ').join('.') : '')) : 'none';
+
+  console.log('[CANVAS-CLICK] Canvas click detected:', {
+    target: elementPath,
+    parent: parentPath,
+    closestBox: targetBox?.id,
+    closestMenuContent: !!targetMenuContent,
+    closestMenuItem: !!targetMenuItem,
+    currentMode: state.currentMode,
+    targetTextContent: e.target.textContent?.substring(0, 20)
+  });
   if (e.target === canvas || !e.target.closest('.box')) {
     if (!state.groupSelectMode) {
       selectBox(null);
@@ -781,17 +801,8 @@ function renderBox(box, region = 'main') {
     canvas.appendChild(boxEl); // Fallback for backward compatibility
   }
 
-  // Check if box is in header/footer and if we're not on Page 1
-  const isPage1 = state.currentPageId === 'page-1';
-  const isHeaderFooter = region === 'header' || region === 'footer';
-  const isReadOnly = isHeaderFooter && !isPage1;
-
-  // Make header/footer boxes read-only on pages other than Page 1
-  if (isReadOnly) {
-    boxEl.classList.add('read-only-box');
-    content.contentEditable = false;
-    return; // Skip adding interactive event listeners
-  }
+  // Header and footer are shared across all pages, so they can be edited from any page
+  // Changes to header/footer automatically apply to all pages
 
   // Event listeners
   boxEl.addEventListener('mousedown', (e) => {
@@ -898,6 +909,14 @@ function renderBox(box, region = 'main') {
 // @agent:MenuRendering:authority
 // Render menu content
 function renderMenuContent(content, box) {
+  console.log('[RENDER-MENU-START] renderMenuContent called for box:', box.id, 'on page:', state.currentPageId);
+  console.log('renderMenuContent DEBUG:', {
+    boxId: box.id,
+    currentPageId: state.currentPageId,
+    menuItemsCount: box.menuItems.length,
+    menuItems: box.menuItems.map(item => ({ text: item.text, linkTo: item.linkTo }))
+  });
+
   content.innerHTML = '';
   content.className = 'box-content menu-content';
   content.style.display = 'flex';
@@ -906,7 +925,8 @@ function renderMenuContent(content, box) {
   content.style.alignItems = 'center';
   content.style.justifyContent = 'space-around';
 
-  box.menuItems.forEach(item => {
+  box.menuItems.forEach((item, itemIndex) => {
+    console.log(`[renderMenuContent] Processing item #${itemIndex}: "${item.text}", hasLinkTo: ${!!item.linkTo}`);
     const menuItemContainer = document.createElement('div');
     menuItemContainer.className = 'menu-item-container';
     menuItemContainer.style.position = 'relative';
@@ -998,23 +1018,39 @@ function renderMenuContent(content, box) {
     
     menuItemContainer.appendChild(menuItem);
     content.appendChild(menuItemContainer);
-    
+
+    // Log CSS properties for debugging
+    const pointerEvents = window.getComputedStyle(menuItem).pointerEvents;
+    const display = window.getComputedStyle(menuItem).display;
+    const visibility = window.getComputedStyle(menuItem).visibility;
+    console.log(`[MENU-ITEM-CSS] Item: "${item.text}", pointerEvents: ${pointerEvents}, display: ${display}, visibility: ${visibility}`);
+
     // Add mousedown and click handlers for navigation (only in Navigate mode)
     if (item.linkTo) {
+      console.log(`[renderMenuContent] Attaching click listener to: "${item.text}"`);
       menuItem.style.cursor = 'pointer';
+
+      // Mousedown handler
       menuItem.addEventListener('mousedown', (e) => {
         if (state.currentMode === 'design') {
           e.stopPropagation(); // Prevent box selection/dragging in Design mode
         }
       });
-      menuItem.addEventListener('click', (e) => {
+
+      // Click handler with logging
+      const clickHandler = (e) => {
+        console.log(`[menuItem.click] BEFORE stopPropagation - item: "${item.text}", target: ${e.target.className}`);
         e.stopPropagation();
+        console.log(`[menuItem.click] Handler fired! item: "${item.text}", currentMode: ${state.currentMode}`);
         if (state.currentMode === 'navigate') {
           // DEBUG - can be removed later
           console.log('Menu item clicked in navigate mode:', item.text, item.linkTo);
           handleLinkClick(item.linkTo);
         }
-      });
+      };
+      console.log(`[LISTENER-ATTACH] About to attach click listener to menuItem: "${item.text}"`);
+      menuItem.addEventListener('click', clickHandler);
+      console.log(`[LISTENER-ATTACH] Click listener attached to menuItem: "${item.text}"`);
     } else {
       // For non-linked items, still prevent box selection in Design mode
       menuItem.addEventListener('mousedown', (e) => {
@@ -1035,9 +1071,16 @@ function renderMenuContent(content, box) {
     });
 
     menuItemContainer.addEventListener('click', (e) => {
+      console.log('menuItemContainer clicked DEBUG:', {
+        itemText: item.text,
+        itemLinkTo: item.linkTo,
+        currentMode: state.currentMode,
+        currentPageId: state.currentPageId
+      });
       if (item.linkTo) {
         e.stopPropagation();
         if (state.currentMode === 'navigate') {
+          console.log('Calling handleLinkClick for:', item.text);
           handleLinkClick(item.linkTo);
         }
       } else {
@@ -1045,6 +1088,7 @@ function renderMenuContent(content, box) {
       }
     });
   });
+  console.log(`[renderMenuContent] Finished rendering menu. Total items: ${box.menuItems.length}`);
 }
 
 // @agent:AccordionManagement:authority
@@ -2542,6 +2586,14 @@ function switchToPage(pageId) {
 function renderCurrentPage() {
   const currentPage = getCurrentPage();
   if (!currentPage) return;
+
+  // DEBUG: Log header menu box data before render
+  const headerMenuBox = state.header.boxes.find(b => b.type === 'menu');
+  console.log('renderCurrentPage DEBUG:', {
+    currentPageId: state.currentPageId,
+    headerMenuBoxId: headerMenuBox?.id,
+    headerMenuBoxMenuItems: headerMenuBox?.menuItems?.map(item => ({ text: item.text, linkTo: item.linkTo }))
+  });
 
   // Clear canvas
   canvas.innerHTML = '';
