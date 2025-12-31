@@ -1,6 +1,6 @@
 # QuickBox
 
-**Version 0.11.2**
+**Version 0.12.1**
 
 A lightweight wireframe mockup tool for rapid web page prototyping.
 
@@ -23,6 +23,7 @@ A lightweight wireframe mockup tool for rapid web page prototyping.
 - **NEW:** Ctrl+Click multi-select for groups (v0.11)
 - **NEW:** Group duplication via context menu (v0.11)
 - **NEW:** Group deletion via context menu (v0.11.2)
+- **NEW:** Drag-to-resize canvas with custom dimensions (v0.12)
 
 ## Usage
 
@@ -84,11 +85,11 @@ Open `index.html` in a web browser to start using QuickBox.
 
 ## File Format
 
-QuickBox v0.11.2 saves files in JSON format with the following structure:
+QuickBox v0.12.1 saves files in JSON format with the following structure:
 
 ```json
 {
-  "version": "0.11.2",
+  "version": "0.12.1",
   "header": {
     "boxes": [...],
     "height": 80
@@ -102,6 +103,8 @@ QuickBox v0.11.2 saves files in JSON format with the following structure:
       "id": "page-1",
       "name": "Page 1",
       "canvasSize": "desktop",
+      "customWidth": null,
+      "customHeight": null,
       "boxes": [...]
     }
   ],
@@ -109,7 +112,7 @@ QuickBox v0.11.2 saves files in JSON format with the following structure:
 }
 ```
 
-**Note**: v0.11.2 files are fully backward compatible with v0.7+ format. Files from v0.6 and earlier are not compatible due to header/footer structure changes. v0.11.2 maintains the same file format as previous versions with no breaking changes.
+**Note**: v0.12.1 files are fully backward compatible with v0.7+ format. Files from v0.6 and earlier are not compatible due to header/footer structure changes. v0.12.1 maintains the same file format as previous versions with no breaking changes. The `customWidth` and `customHeight` properties are optional and only present when a page has been resized via dragging.
 
 ## License
 

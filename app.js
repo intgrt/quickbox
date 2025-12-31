@@ -1,6 +1,6 @@
 // QuickBox - Wireframe Mockup Tool
 // Version
-const APP_VERSION = "0.11.2";
+const APP_VERSION = "0.12.1";
 
 // @agent:AppConfig:authority
 // Configurable Constants
@@ -8,6 +8,16 @@ const APP_VERSION = "0.11.2";
 const BUTTON_DEFAULT_WIDTH = 130;
 const BUTTON_DEFAULT_HEIGHT = 30;
 const BUTTON_BORDER_RADIUS = 8;
+
+// @agent:CanvasResize:authority
+// Canvas resize constraints
+const CANVAS_MIN_WIDTH = 300;
+const CANVAS_MIN_HEIGHT = 300;
+const CANVAS_PRESET_SIZES = {
+  desktop: 1200,
+  tablet: 768,
+  mobile: 375
+};
 
 // @agent:StateManagement:authority
 // State management
@@ -2698,8 +2708,13 @@ function renderCurrentPage() {
   footerRegion.style.height = state.footer.height + 'px';
   canvas.appendChild(footerRegion);
 
-  // Set canvas size
-  setCanvasSize(currentPage.canvasSize);
+  // Set canvas size (handle both preset and custom sizes)
+  if (currentPage.canvasSize === 'custom' && currentPage.customWidth && currentPage.customHeight) {
+    setCustomCanvasSize(currentPage.customWidth, currentPage.customHeight);
+    console.log('[CANVAS-SIZE] Restored custom size for page:', currentPage.id);
+  } else {
+    setCanvasSize(currentPage.canvasSize || 'desktop');
+  }
 
   // Render header boxes
   state.header.boxes.forEach(box => renderBox(box, 'header'));
@@ -2712,6 +2727,10 @@ function renderCurrentPage() {
 
   // Setup region divider drag listeners
   setupRegionDividers();
+
+  // @agent:CanvasResize:extension
+  // Recreate canvas resize handles (they're removed when canvas.innerHTML is cleared)
+  recreateCanvasResizeHandles();
 
   updateCanvasHeight();
 }
@@ -3043,21 +3062,154 @@ function handleImageUpload(e) {
   imageInput.value = '';
 }
 
+// @agent:CanvasResize:authority
+// Recreate canvas resize handles after canvas is re-rendered
+function recreateCanvasResizeHandles() {
+  // Remove existing handles if present
+  document.querySelectorAll('.canvas-resize-handle').forEach(handle => handle.remove());
+
+  // Create new handle elements
+  const rightHandle = document.createElement('div');
+  rightHandle.className = 'canvas-resize-handle canvas-resize-right';
+  rightHandle.id = 'canvasResizeRight';
+  rightHandle.title = 'Drag to change width';
+  rightHandle.addEventListener('mousedown', (e) => startCanvasResize(e, 'width'));
+  canvas.appendChild(rightHandle);
+
+  const bottomHandle = document.createElement('div');
+  bottomHandle.className = 'canvas-resize-handle canvas-resize-bottom';
+  bottomHandle.id = 'canvasResizeBottom';
+  bottomHandle.title = 'Drag to change height';
+  bottomHandle.addEventListener('mousedown', (e) => startCanvasResize(e, 'height'));
+  canvas.appendChild(bottomHandle);
+
+  const cornerHandle = document.createElement('div');
+  cornerHandle.className = 'canvas-resize-handle canvas-resize-corner';
+  cornerHandle.id = 'canvasResizeCorner';
+  cornerHandle.title = 'Drag to change width and height';
+  cornerHandle.addEventListener('mousedown', (e) => startCanvasResize(e, 'both'));
+  canvas.appendChild(cornerHandle);
+
+  console.log('[CANVAS-RESIZE] Recreated resize handles');
+}
+
+// @agent:CanvasResize:authority
+// Canvas resize event handlers
+function startCanvasResize(e, direction) {
+  e.preventDefault();
+  e.stopPropagation();
+
+  console.log('[CANVAS-RESIZE] Starting resize in direction:', direction);
+
+  const startX = e.clientX;
+  const startY = e.clientY;
+  const startWidth = canvas.offsetWidth;
+  const startHeight = canvas.offsetHeight;
+
+  // Show handles as active
+  canvasResizeRight.classList.add('active');
+  canvasResizeBottom.classList.add('active');
+  canvasResizeCorner.classList.add('active');
+
+  function onMouseMove(moveEvent) {
+    const deltaX = moveEvent.clientX - startX;
+    const deltaY = moveEvent.clientY - startY;
+
+    let newWidth = startWidth;
+    let newHeight = startHeight;
+
+    if (direction === 'width' || direction === 'both') {
+      newWidth = startWidth + deltaX;
+    }
+
+    if (direction === 'height' || direction === 'both') {
+      newHeight = startHeight + deltaY;
+    }
+
+    // Clamp to minimum values only
+    newWidth = Math.max(CANVAS_MIN_WIDTH, newWidth);
+    newHeight = Math.max(CANVAS_MIN_HEIGHT, newHeight);
+
+    // Apply inline styles
+    canvas.style.width = newWidth + 'px';
+    canvas.style.height = newHeight + 'px';
+    canvas.className = ''; // Remove preset classes
+
+    console.log('[CANVAS-RESIZE] Resizing to:', { width: newWidth, height: newHeight, direction });
+  }
+
+  function onMouseUp() {
+    document.removeEventListener('mousemove', onMouseMove);
+    document.removeEventListener('mouseup', onMouseUp);
+
+    // Remove active state
+    canvasResizeRight.classList.remove('active');
+    canvasResizeBottom.classList.remove('active');
+    canvasResizeCorner.classList.remove('active');
+
+    // Store final dimensions
+    const finalWidth = parseInt(canvas.style.width);
+    const finalHeight = parseInt(canvas.style.height);
+
+    setCustomCanvasSize(finalWidth, finalHeight);
+
+    console.log('[CANVAS-RESIZE] Resize complete. Final dimensions:', { width: finalWidth, height: finalHeight });
+
+    updateCanvasHeight();
+  }
+
+  document.addEventListener('mousemove', onMouseMove);
+  document.addEventListener('mouseup', onMouseUp);
+}
+
 // @agent:CanvasSize:authority
 // Canvas Size
 function setCanvasSize(size) {
   const currentPage = getCurrentPage();
   if (currentPage) {
     currentPage.canvasSize = size;
+    // Clear custom dimensions when switching to preset
+    currentPage.customWidth = null;
+    currentPage.customHeight = null;
   }
 
   canvas.className = size === 'desktop' ? '' : size;
+  canvas.style.width = '';
+  canvas.style.height = '';
 
   // Update active button
   document.querySelectorAll('.canvas-size-btn').forEach(btn => btn.classList.remove('active'));
   if (size === 'desktop') desktopBtn.classList.add('active');
   if (size === 'tablet') tabletBtn.classList.add('active');
   if (size === 'mobile') mobileBtn.classList.add('active');
+
+  console.log('[CANVAS-SIZE] Preset size applied:', size);
+}
+
+// @agent:CanvasResize:authority
+// Set custom canvas dimensions via drag
+function setCustomCanvasSize(width, height) {
+  const currentPage = getCurrentPage();
+  if (!currentPage) return;
+
+  // Clamp to minimum values only
+  const clampedWidth = Math.max(CANVAS_MIN_WIDTH, width);
+  const clampedHeight = Math.max(CANVAS_MIN_HEIGHT, height);
+
+  // Store custom dimensions
+  currentPage.customWidth = clampedWidth;
+  currentPage.customHeight = clampedHeight;
+  currentPage.canvasSize = 'custom';
+
+  // Apply inline styles (override class-based styles)
+  canvas.style.width = clampedWidth + 'px';
+  canvas.style.height = clampedHeight + 'px';
+  canvas.className = ''; // Remove preset classes
+
+  // Clear button active states
+  document.querySelectorAll('.canvas-size-btn').forEach(btn => btn.classList.remove('active'));
+
+  console.log('[CANVAS-SIZE] Custom size set:', { width: clampedWidth, height: clampedHeight });
 }
 
 // @agent:FileOperations:authority

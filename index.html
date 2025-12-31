@@ -99,7 +99,13 @@
       <!-- @agent:Canvas:authority -->
       <!-- Canvas -->
       <div id="canvasContainer">
-        <div id="canvas"></div>
+        <div id="canvas">
+          <!-- @agent:CanvasResize:extension -->
+          <!-- Canvas resize handles -->
+          <div class="canvas-resize-handle canvas-resize-right" id="canvasResizeRight" title="Drag to change width"></div>
+          <div class="canvas-resize-handle canvas-resize-bottom" id="canvasResizeBottom" title="Drag to change height"></div>
+          <div class="canvas-resize-handle canvas-resize-corner" id="canvasResizeCorner" title="Drag to change width and height"></div>
+        </div>
       </div>
     </div>
   </div>
