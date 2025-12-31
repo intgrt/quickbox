@@ -376,10 +376,16 @@ label {
   z-index: 10;
 }
 
+/* Resize handles only show in Design mode */
 .box:hover .resize-handle,
 .box.resizing .resize-handle,
 .box.selected .resize-handle {
   display: block;
+}
+
+/* In Navigate mode, never show resize handles on hover */
+.navigate-mode .box:hover .resize-handle {
+  display: none !important;
 }
 
 /* Menu boxes should only show resize handles when selected, not on hover */
@@ -390,6 +396,17 @@ label {
 .menu-box.selected .resize-handle,
 .menu-box.resizing .resize-handle {
   display: block;
+}
+
+/* In Navigate mode, menu boxes also never show resize handles */
+.navigate-mode .menu-box.selected .resize-handle,
+.navigate-mode .menu-box.resizing .resize-handle {
+  display: none !important;
+}
+
+/* In Navigate mode, boxes should not show move cursor */
+.navigate-mode .box {
+  cursor: default;
 }
 
 .resize-handle.nw { top: -6px; left: -6px; cursor: nw-resize; }
