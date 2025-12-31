@@ -38,7 +38,7 @@ const undoHistory = {
   coalesceTimer: null    // Timer for debouncing continuous operations
 };
 
-// @agent:UndoSystem:authority
+// @agent:UndoSystem:extension
 // Capture current state as a JSON snapshot
 function captureSnapshot() {
   return JSON.parse(JSON.stringify({
@@ -49,7 +49,7 @@ function captureSnapshot() {
   }));
 }
 
-// @agent:UndoSystem:authority
+// @agent:UndoSystem:extension
 // Add snapshot to undo history (coalesces continuous operations)
 function pushHistory(operationType = 'discrete') {
   // Skip snapshots during continuous operations (except on completion)
@@ -80,7 +80,7 @@ function pushHistory(operationType = 'discrete') {
   }
 }
 
-// @agent:UndoSystem:authority
+// @agent:UndoSystem:extension
 // Restore state from snapshot and re-render UI
 function restoreSnapshot(snapshot) {
   // Restore serialized state
@@ -114,7 +114,7 @@ function restoreSnapshot(snapshot) {
   updatePageIdentifier();
 }
 
-// @agent:UndoSystem:authority
+// @agent:UndoSystem:extension
 // Perform undo - restore previous state
 function performUndo() {
   if (undoHistory.past.length === 0) {
@@ -133,7 +133,7 @@ function performUndo() {
   console.log('Undo performed. Undo stack size:', undoHistory.past.length);
 }
 
-// @agent:UndoSystem:authority
+// @agent:UndoSystem:extension
 // Perform redo - restore next state
 function performRedo() {
   if (undoHistory.future.length === 0) {
@@ -243,7 +243,7 @@ addChildMenuItemBtn.addEventListener('click', addChildMenuItem);
 saveMenuBtn.addEventListener('click', saveMenu);
 closeMenuEditorBtn.addEventListener('click', closeMenuEditor);
 
-// @agent:AccordionManagement:authority
+// @agent:AccordionManagement:extension
 // Accordion editor event listeners
 addAccordionItemBtn.addEventListener('click', addAccordionItem);
 saveAccordionBtn.addEventListener('click', saveAccordion);
@@ -467,7 +467,7 @@ setTimeout(() => {
 document.title = `QuickBox v${APP_VERSION} - Wireframe Mockup Tool`;
 document.getElementById('appTitle').textContent = `QuickBox v${APP_VERSION}`;
 
-// @agent:GroupSelection:authority
+// @agent:GroupSelection:extension
 // @agent:UndoSystem:extension
 // Cleanup handlers for temporary groups and undo/redo
 document.addEventListener('keydown', (e) => {
@@ -534,9 +534,11 @@ function updateModeUI() {
   if (state.currentMode === 'design') {
     designModeBtn.classList.add('active');
     navigateModeBtn.classList.remove('active');
+    document.body.classList.remove('navigate-mode');
   } else {
     designModeBtn.classList.remove('active');
     navigateModeBtn.classList.add('active');
+    document.body.classList.add('navigate-mode');
   }
 }
 
@@ -547,7 +549,6 @@ function addBox(type) {
   const currentPage = getCurrentPage();
   if (!currentPage) return;
 
-  // @agent:UndoSystem:extension
   pushHistory(); // Capture state before box creation
 
   state.boxCounter++;
@@ -607,7 +608,6 @@ function addBox(type) {
     ];
   }
 
-  // @agent:AccordionManagement:authority
   // Accordion-specific properties (multi-item array structure)
   if (type === 'accordion') {
     box.accordionItems = [
@@ -688,7 +688,6 @@ function renderBox(box, region = 'main') {
     content.style.fontSize = box.fontSize + 'px';
     content.style.fontFamily = box.fontFamily;
 
-    // @agent:UndoSystem:extension
     // Capture state when text editing finishes (blur event)
     content.addEventListener('blur', () => {
       box.content = content.textContent;
@@ -703,7 +702,6 @@ function renderBox(box, region = 'main') {
     content.style.alignItems = 'center';
     content.style.justifyContent = 'center';
 
-    // @agent:UndoSystem:extension
     // Capture state when button text editing finishes (blur event)
     content.addEventListener('blur', () => {
       box.content = content.textContent;
@@ -717,7 +715,7 @@ function renderBox(box, region = 'main') {
       content.appendChild(img);
     }
 
-    // @agent:ImageBoxManagement:authority - Change Image icon in Design mode
+    // Change Image icon in Design mode
     if (state.currentMode === 'design') {
       const changeImageIcon = document.createElement('div');
       changeImageIcon.className = 'image-change-icon';
@@ -762,12 +760,24 @@ function renderBox(box, region = 'main') {
       boxEl.appendChild(editIcon);
     }
   } else if (box.type === 'accordion') {
-    // @agent:AccordionManagement:authority
     content.contentEditable = false;
     renderAccordionContent(content, box);
 
-    // Design mode: Add edit icon (like menu boxes)
+    // Design mode: Add drag and edit icons (like menu boxes)
     if (state.currentMode === 'design') {
+      // Drag icon in top left
+      const dragIcon = document.createElement('div');
+      dragIcon.className = 'accordion-drag-icon';
+      dragIcon.textContent = '☰';
+      dragIcon.title = 'Drag Accordion';
+      dragIcon.addEventListener('mousedown', (e) => {
+        e.stopPropagation();
+        selectBox(box);
+        startDrag(e, box);
+      });
+      boxEl.appendChild(dragIcon);
+
+      // Edit icon in top right
       const editIcon = document.createElement('div');
       editIcon.className = 'accordion-edit-icon';
       editIcon.textContent = '✏️';
@@ -1091,7 +1101,7 @@ function renderMenuContent(content, box) {
   console.log(`[renderMenuContent] Finished rendering menu. Total items: ${box.menuItems.length}`);
 }
 
-// @agent:AccordionManagement:authority
+// @agent:AccordionManagement:extension
 // Render Accordion Content
 function renderAccordionContent(content, box) {
   content.innerHTML = '';
@@ -1193,7 +1203,7 @@ function selectBox(box) {
   }
 }
 
-// @agent:GroupSelection:authority
+// @agent:GroupSelection:extension
 // Helper functions for group selection
 function updateGroupVisualsOnCanvas() {
   console.log('Updating group visuals for', state.tempGroup.length, 'boxes');
@@ -1420,7 +1430,6 @@ function showMenuItemLinkDialog(item) {
 function saveMenu() {
   if (!currentEditingMenu) return;
 
-  // @agent:UndoSystem:extension
   pushHistory(); // Capture state before menu save
 
   // Update the menu box rendering
@@ -1492,7 +1501,7 @@ function moveMenuItem(itemId, targetItemId) {
   }
 }
 
-// @agent:AccordionManagement:authority
+// @agent:AccordionManagement:extension
 // Accordion Editor Functions
 let currentAccordionBox = null;
 
@@ -1622,7 +1631,6 @@ function moveAccordionItem(fromIndex, toIndex) {
 function saveAccordion() {
   if (!currentAccordionBox) return;
 
-  // @agent:UndoSystem:extension
   pushHistory(); // Capture state before accordion save
 
   // Re-render the accordion box
@@ -1730,7 +1738,6 @@ function transferBoxToRegion(box, sourceRegion, sourceArray, targetRegion) {
 // @agent:UndoSystem:extension
 // Region divider drag functionality
 function startRegionDividerDrag(e, regionType) {
-  // @agent:UndoSystem:extension
   // Mark continuous operation start
   undoHistory.continuousOp = 'region-resize';
 
@@ -1771,7 +1778,6 @@ function startRegionDividerDrag(e, regionType) {
     document.removeEventListener('mousemove', onMouseMove);
     document.removeEventListener('mouseup', onMouseUp);
 
-    // @agent:UndoSystem:extension
     // Mark continuous operation end
     pushHistory('continuous-end');
     undoHistory.continuousOp = null;
@@ -1847,7 +1853,6 @@ function startDrag(e, box) {
 }
 
 function startSingleDrag(e, box) {
-  // @agent:UndoSystem:extension
   // Mark continuous operation start
   undoHistory.continuousOp = 'drag';
 
@@ -1937,7 +1942,6 @@ function startSingleDrag(e, box) {
       updateCanvasHeight();
     }
 
-    // @agent:UndoSystem:extension
     // Mark continuous operation end
     pushHistory('continuous-end');
     undoHistory.continuousOp = null;
@@ -1951,7 +1955,6 @@ function startSingleDrag(e, box) {
 // @agent:UndoSystem:extension
 // Group drag mode - drag all boxes in temp group together
 function startGroupDrag(e, draggedBox) {
-  // @agent:UndoSystem:extension
   // Mark continuous operation start
   undoHistory.continuousOp = 'drag';
 
@@ -2056,7 +2059,6 @@ function startGroupDrag(e, draggedBox) {
       updateCanvasHeight();
     }
 
-    // @agent:UndoSystem:extension
     // Mark continuous operation end
     pushHistory('continuous-end');
     undoHistory.continuousOp = null;
@@ -2073,7 +2075,6 @@ function startGroupDrag(e, draggedBox) {
 // @agent:UndoSystem:extension
 // Resize functionality
 function startResize(e, box, direction) {
-  // @agent:UndoSystem:extension
   // Mark continuous operation start
   undoHistory.continuousOp = 'resize';
 
@@ -2125,7 +2126,6 @@ function startResize(e, box, direction) {
     document.removeEventListener('mouseup', onMouseUp);
     updateCanvasHeight();
 
-    // @agent:UndoSystem:extension
     // Mark continuous operation end
     pushHistory('continuous-end');
     undoHistory.continuousOp = null;
@@ -2390,7 +2390,6 @@ function deleteSelectedBox() {
   const currentPage = getCurrentPage();
   if (!currentPage) return;
 
-  // @agent:UndoSystem:extension
   pushHistory(); // Capture state before deletion
 
   const boxEl = document.getElementById(state.selectedBox.id);
@@ -2431,13 +2430,12 @@ function deleteSelectedBox() {
   updateCanvasHeight();
 }
 
-// @agent:BoxManagement:authority
+// @agent:BoxManagement:extension
 // @agent:UndoSystem:extension
 // Duplicate Box
 function duplicateBox(sourceBox) {
   console.log('Duplicating box:', sourceBox.id, sourceBox.name);
 
-  // @agent:UndoSystem:extension
   pushHistory(); // Capture state before duplication
 
   // Find source region
@@ -2500,13 +2498,12 @@ function regenerateMenuItemIds(menuItems) {
   });
 }
 
-// @agent:BoxManagement:authority
+// @agent:BoxManagement:extension
 // @agent:UndoSystem:extension
 // Bring Box to Front
 function bringToFront(box) {
   console.log('Bringing box to front:', box.id, box.name);
 
-  // @agent:UndoSystem:extension
   pushHistory(); // Capture state before z-index change
 
   // Assign highest z-index
@@ -2521,13 +2518,12 @@ function bringToFront(box) {
   console.log('Box now at z-index:', box.zIndex);
 }
 
-// @agent:BoxManagement:authority
+// @agent:BoxManagement:extension
 // @agent:UndoSystem:extension
 // Send Box to Back
 function sendToBack(box) {
   console.log('Sending box to back:', box.id, box.name);
 
-  // @agent:UndoSystem:extension
   pushHistory(); // Capture state before z-index change
 
   // Set to z-index 0 (below all normal boxes which start at 1)
@@ -2546,7 +2542,6 @@ function sendToBack(box) {
 // @agent:UndoSystem:extension
 // Page Management
 function addPage() {
-  // @agent:UndoSystem:extension
   pushHistory(); // Capture state before page creation
 
   state.pageCounter++;
@@ -2676,7 +2671,6 @@ function showContextMenu(e, boxId) {
     contextMenu.appendChild(editMenuOption);
   }
 
-  // @agent:ContextMenu:extension - Duplicate option
   const duplicateOption = document.createElement('div');
   duplicateOption.className = 'context-menu-item';
   duplicateOption.textContent = 'Duplicate';
@@ -2686,7 +2680,6 @@ function showContextMenu(e, boxId) {
   });
   contextMenu.appendChild(duplicateOption);
 
-  // @agent:ContextMenu:extension - Bring to Front option
   const bringToFrontOption = document.createElement('div');
   bringToFrontOption.className = 'context-menu-item';
   bringToFrontOption.textContent = 'Bring to Front';
@@ -2696,7 +2689,6 @@ function showContextMenu(e, boxId) {
   });
   contextMenu.appendChild(bringToFrontOption);
 
-  // @agent:ContextMenu:extension - Send to Back option
   const sendToBackOption = document.createElement('div');
   sendToBackOption.className = 'context-menu-item';
   sendToBackOption.textContent = 'Send to Back';
@@ -2933,7 +2925,7 @@ function newFile() {
   renderCurrentPage();
 }
 
-// @agent:FileOperations:authority
+// @agent:FileOperations:extension
 async function saveFile() {
   const data = {
     version: APP_VERSION,

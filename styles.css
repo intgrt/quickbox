@@ -752,17 +752,6 @@ label {
   flex-direction: column;
 }
 
-/* @agent:AccordionManagement:authority */
-/* Accordion Box Styles */
-.box.accordion-box {
-  background: #fff;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
 .accordion-content {
   display: flex;
   flex-direction: column;
@@ -821,6 +810,27 @@ label {
 /* Navigate mode cursor */
 .navigate-mode .accordion-header {
   cursor: pointer;
+}
+
+/* Accordion Drag Icon */
+.accordion-drag-icon {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 2px solid #333;
+  border-radius: 3px;
+  padding: 1px 3px;
+  font-size: 14px;
+  cursor: move;
+  z-index: 10;
+  user-select: none;
+  box-shadow: 1px 1px 0 rgba(0, 0, 0, 0.2);
+}
+
+.accordion-drag-icon:hover {
+  background: rgba(230, 230, 230, 0.9);
+  transform: scale(1.05);
 }
 
 /* Accordion Edit Icon */
