@@ -1,6 +1,6 @@
 # QuickBox
 
-**Version 0.10**
+**Version 0.11**
 
 A lightweight wireframe mockup tool for rapid web page prototyping.
 
@@ -18,8 +18,10 @@ A lightweight wireframe mockup tool for rapid web page prototyping.
 - Hand-drawn Balsamiq-style aesthetic
 - Group selection and drag (v0.8)
 - Duplicate element via context menu (v0.8.1)
-- **NEW:** Fixed menu navigation across all pages (v0.10)
-- **IMPROVED:** Header/footer editing available from any page (v0.10)
+- Fixed menu navigation across all pages (v0.10)
+- Header/footer editing available from any page (v0.10)
+- **NEW:** Ctrl+Click multi-select for groups (v0.11)
+- **NEW:** Group duplication via context menu (v0.11)
 
 ## Usage
 
@@ -32,6 +34,21 @@ Open `index.html` in a web browser to start using QuickBox.
 - **Resize boxes**: Hover over box edges to show resize handles
 - **Delete boxes**: Select box and click Delete button
 - **Link boxes**: Right-click box for context menu
+
+### Group Selection & Duplication (v0.11)
+
+**Create Groups** - Two methods:
+1. **Ctrl+Click** (or Cmd+Click on Mac): Click while holding Ctrl to add/remove boxes from a group
+2. **Rectangle Select**: Click "Create Group" button and drag a rectangle around boxes
+
+**Group Actions**:
+- **Drag group**: All selected boxes move together
+- **Duplicate group**: Right-click any grouped box and select "Duplicate" to duplicate ALL boxes in the group at once
+- **Disband group**: Single-click any grouped box without Ctrl to clear the group
+
+**Visual Feedback**:
+- Grouped boxes show a blue dashed outline
+- Console logs track all group operations for debugging
 
 ### Pages
 
@@ -66,11 +83,11 @@ Open `index.html` in a web browser to start using QuickBox.
 
 ## File Format
 
-QuickBox v0.10 saves files in JSON format with the following structure:
+QuickBox v0.11 saves files in JSON format with the following structure:
 
 ```json
 {
-  "version": "0.10",
+  "version": "0.11",
   "header": {
     "boxes": [...],
     "height": 80
@@ -91,7 +108,7 @@ QuickBox v0.10 saves files in JSON format with the following structure:
 }
 ```
 
-**Note**: v0.10 files are fully backward compatible with v0.7+ format. Files from v0.6 and earlier are not compatible due to header/footer structure changes. v0.10 maintains the same file format as previous versions with no breaking changes.
+**Note**: v0.11 files are fully backward compatible with v0.7+ format. Files from v0.6 and earlier are not compatible due to header/footer structure changes. v0.11 maintains the same file format as previous versions with no breaking changes.
 
 ## License
 

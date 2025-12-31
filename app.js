@@ -1,6 +1,6 @@
 // QuickBox - Wireframe Mockup Tool
 // Version
-const APP_VERSION = "0.10";
+const APP_VERSION = "0.11";
 
 // @agent:AppConfig:authority
 // Configurable Constants
@@ -882,6 +882,37 @@ function renderBox(box, region = 'main') {
       return;
     }
 
+    // @agent:CtrlClickMultiSelect:authority
+    // Handle Ctrl+Click multi-select for group creation
+    if (e.ctrlKey || e.metaKey) {
+      e.stopPropagation();
+      console.log('[CTRL-CLICK] Ctrl+Click detected on box:', box.id);
+
+      const isInGroup = state.tempGroup.some(b => b.id === box.id);
+      console.log('[CTRL-CLICK] Box is currently in group:', isInGroup);
+
+      if (isInGroup) {
+        // Remove from group
+        state.tempGroup = state.tempGroup.filter(b => b.id !== box.id);
+        console.log('[CTRL-CLICK] Removed box from group. New group size:', state.tempGroup.length);
+      } else {
+        // Add to group
+        state.tempGroup.push(box);
+        console.log('[CTRL-CLICK] Added box to group. New group size:', state.tempGroup.length);
+      }
+
+      // Update visual indicators
+      updateGroupVisualsOnCanvas();
+      console.log('[CTRL-CLICK] Visual indicators updated');
+      return;
+    }
+
+    // Single click without Ctrl - dispand group and select only this box
+    if (state.tempGroup.length > 0) {
+      console.log('[SINGLE-CLICK] Single click detected with active group. Clearing group and selecting box:', box.id);
+      clearTempGroup();
+    }
+
     // Design mode - old link behavior (kept for backward compatibility with non-button elements)
     if (box.linkTo && !e.target.classList.contains('resize-handle') && box.type !== 'button') {
       e.stopPropagation();
@@ -1206,7 +1237,8 @@ function selectBox(box) {
 // @agent:GroupSelection:extension
 // Helper functions for group selection
 function updateGroupVisualsOnCanvas() {
-  console.log('Updating group visuals for', state.tempGroup.length, 'boxes');
+  console.log('[GROUP-VISUAL] Updating group visuals for', state.tempGroup.length, 'boxes');
+  console.log('[GROUP-VISUAL] Group members:', state.tempGroup.map(b => b.id).join(', '));
 
   // Remove all group indicators first
   document.querySelectorAll('.in-temp-group').forEach(el => el.classList.remove('in-temp-group'));
@@ -1215,18 +1247,19 @@ function updateGroupVisualsOnCanvas() {
   state.tempGroup.forEach(box => {
     const boxEl = document.getElementById(box.id);
     if (boxEl) {
-      console.log('Adding visual indicator to box:', box.id);
+      console.log('[GROUP-VISUAL] Adding visual indicator to box:', box.id);
       boxEl.classList.add('in-temp-group');
     } else {
-      console.log('WARNING: Could not find element for box:', box.id);
+      console.log('[GROUP-VISUAL] WARNING: Could not find element for box:', box.id);
     }
   });
 
-  console.log('Group visuals updated');
+  console.log('[GROUP-VISUAL] Group visuals updated. Total boxes highlighted:', state.tempGroup.length);
 }
 
 function clearTempGroup() {
-  console.log('Clearing temp group. Was', state.tempGroup.length, 'boxes');
+  console.log('[CLEAR-GROUP] Clearing temp group. Was', state.tempGroup.length, 'boxes');
+  console.log('[CLEAR-GROUP] Group members being cleared:', state.tempGroup.map(b => b.id).join(', '));
 
   state.tempGroup = [];
   state.groupSelectMode = false;
@@ -1239,7 +1272,7 @@ function clearTempGroup() {
   }
   canvas.style.cursor = 'default';
 
-  console.log('Temp group cleared');
+  console.log('[CLEAR-GROUP] Temp group cleared. All visual indicators removed.');
 }
 
 // @agent:MenuEditor:authority
@@ -1834,20 +1867,22 @@ function setupRegionDividers() {
 function startDrag(e, box) {
   e.preventDefault();
 
-  console.log('Drag started on box:', box.id);
-  console.log('Current tempGroup size:', state.tempGroup.length);
+  console.log('[DRAG] Drag started on box:', box.id);
+  console.log('[DRAG] Current tempGroup size:', state.tempGroup.length);
+  console.log('[DRAG] Boxes in group:', state.tempGroup.map(b => b.id).join(', '));
 
   // Check if this box is in a group
   const isInGroup = state.tempGroup.some(b => b.id === box.id);
-  console.log('Box is in group:', isInGroup);
+  console.log('[DRAG] Box is in group:', isInGroup);
 
   if (isInGroup && state.tempGroup.length > 1) {
     // Group drag mode
-    console.log('Starting GROUP drag with', state.tempGroup.length, 'boxes');
+    console.log('[DRAG] Starting GROUP drag with', state.tempGroup.length, 'boxes');
+    console.log('[DRAG] Group members:', state.tempGroup.map(b => b.id).join(', '));
     startGroupDrag(e, box);
   } else {
     // Single box drag mode
-    console.log('Starting SINGLE drag');
+    console.log('[DRAG] Starting SINGLE drag');
     startSingleDrag(e, box);
   }
 }
@@ -2430,25 +2465,26 @@ function deleteSelectedBox() {
   updateCanvasHeight();
 }
 
-// @agent:BoxManagement:extension
-// @agent:UndoSystem:extension
-// Duplicate Box
+// @agent:BoxDuplication:authority
 function duplicateBox(sourceBox) {
-  console.log('Duplicating box:', sourceBox.id, sourceBox.name);
+  console.log('[DUPLICATE-BOX] Duplicating box:', sourceBox.id, sourceBox.name);
 
   pushHistory(); // Capture state before duplication
 
   // Find source region
   const boxInfo = findBoxInRegions(sourceBox.id);
   if (!boxInfo) {
-    console.log('Could not find box in regions');
+    console.log('[DUPLICATE-BOX] ERROR: Could not find box in regions:', sourceBox.id);
     return;
   }
+
+  console.log('[DUPLICATE-BOX] Found box in region:', boxInfo.region);
 
   // Check region edit restrictions (header/footer on non-Page-1)
   const isPage1 = state.currentPageId === 'page-1';
   const isHeaderFooter = boxInfo.region === 'header' || boxInfo.region === 'footer';
   if (!isPage1 && isHeaderFooter) {
+    console.log('[DUPLICATE-BOX] ERROR: Cannot duplicate header/footer outside Page 1');
     alert('Header and footer boxes can only be duplicated on Page 1');
     return;
   }
@@ -2468,13 +2504,17 @@ function duplicateBox(sourceBox) {
   newBox.zIndex = state.zIndexCounter++;
   newBox.linkTo = null; // Clear link
 
+  console.log('[DUPLICATE-BOX] New box created:', newBoxId, 'at position', { x: newBox.x, y: newBox.y });
+
   // Handle menu boxes - regenerate menu item IDs
   if (newBox.type === 'menu' && newBox.menuItems) {
+    console.log('[DUPLICATE-BOX] Regenerating menu item IDs for duplicated menu box');
     newBox.menuItems = regenerateMenuItemIds(newBox.menuItems);
   }
 
   // Add to appropriate region array
   boxInfo.array.push(newBox);
+  console.log('[DUPLICATE-BOX] Added to', boxInfo.region, 'region. Total boxes in region:', boxInfo.array.length);
 
   // Render, update navigator, select
   renderBox(newBox, boxInfo.region);
@@ -2482,7 +2522,7 @@ function duplicateBox(sourceBox) {
   selectBox(newBox);
   updateCanvasHeight();
 
-  console.log('Box duplicated successfully:', newBoxId, newBox.name);
+  console.log('[DUPLICATE-BOX] Box duplicated successfully:', newBoxId, newBox.name);
 }
 
 // @agent:MenuManagement:authority
@@ -2671,11 +2711,27 @@ function showContextMenu(e, boxId) {
     contextMenu.appendChild(editMenuOption);
   }
 
+  // @agent:GroupDuplicate:extension
   const duplicateOption = document.createElement('div');
   duplicateOption.className = 'context-menu-item';
   duplicateOption.textContent = 'Duplicate';
   duplicateOption.addEventListener('click', () => {
-    duplicateBox(box);
+    if (state.tempGroup.length > 1) {
+      // Duplicate all boxes in group
+      console.log('[DUPLICATE-GROUP] Duplicating group with', state.tempGroup.length, 'boxes');
+      console.log('[DUPLICATE-GROUP] Group members:', state.tempGroup.map(b => b.id).join(', '));
+
+      state.tempGroup.forEach((groupBox, index) => {
+        console.log('[DUPLICATE-GROUP] Duplicating box', index + 1, 'of', state.tempGroup.length, ':', groupBox.id);
+        duplicateBox(groupBox);
+      });
+
+      console.log('[DUPLICATE-GROUP] Group duplication complete');
+    } else {
+      // Duplicate single box
+      console.log('[DUPLICATE-SINGLE] Duplicating single box:', box.id);
+      duplicateBox(box);
+    }
     contextMenu.remove();
   });
   contextMenu.appendChild(duplicateOption);
