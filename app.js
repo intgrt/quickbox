@@ -1,6 +1,6 @@
 // QuickBox - Wireframe Mockup Tool
 // Version
-const APP_VERSION = "0.12.1";
+const APP_VERSION = "0.12.2";
 
 // @agent:AppConfig:authority
 // Configurable Constants
@@ -37,7 +37,7 @@ const state = {
 
 // @agent:UndoSystem:authority
 // Undo/Redo System Configuration
-const UNDO_HISTORY_SIZE = 10; // Change to 5 for fewer undo states - no code difference
+const UNDO_HISTORY_SIZE = 20; // Maximum number of undo states to keep in history
 const COALESCE_TIMEOUT_MS = 500; // Debounce timeout for continuous operations (ms)
 
 // Undo history state
@@ -832,43 +832,23 @@ function renderBox(box, region = 'main') {
     }
 
     // Design mode behavior
-    // For menu boxes, allow normal dragging and selection
-    if (box.type === 'menu') {
-      // Ignore clicks on menu items, edit icon, and handles
-      const isMenuItemClick = e.target.closest('.menu-item') || e.target.closest('.menu-item-container');
-      const isIconClick = e.target.closest('.menu-edit-icon');
-      const isHandleClick = e.target.classList.contains('resize-handle');
+    // Ignore clicks on special elements (menu items, icons, resize handles)
+    const isMenuItemClick = e.target.closest('.menu-item') || e.target.closest('.menu-item-container');
+    const isIconClick = e.target.closest('.menu-edit-icon') || e.target.closest('.accordion-edit-icon');
+    const isHandleClick = e.target.classList.contains('resize-handle');
 
-      if (isMenuItemClick || isIconClick || isHandleClick) {
-        return; // Let these elements handle their own events
-      }
+    if (isMenuItemClick || isIconClick || isHandleClick) {
+      return; // Let these elements handle their own events
+    }
 
-      // Normal dragging behavior for menu boxes in Design mode
-      if (e.target.classList.contains('box')) {
-        selectBox(box);
+    // Allow dragging from anywhere inside the box (using closest to find parent box)
+    const clickedBox = e.target.closest('.box');
+    if (clickedBox) {
+      selectBox(box);
+      // Only initiate drag on left-click (button 0), not on right-click (button 2) to preserve groups for context menu
+      if (e.button === 0) {
         startDrag(e, box);
-
-        // DEBUG - can be removed later
-        console.log('Box selected in design mode:', box.id, box.type);
-      } else {
-        selectBox(box);
-
-        // DEBUG - can be removed later
-        console.log('Box selected in design mode:', box.id, box.type);
-      }
-    } else {
-      // Normal box behavior for non-menu boxes
-      if (!e.target.classList.contains('resize-handle') && e.target.classList.contains('box')) {
-        selectBox(box);
-        startDrag(e, box);
-
-        // DEBUG - can be removed later
-        console.log('Box selected in design mode:', box.id, box.type);
-      } else if (!e.target.classList.contains('resize-handle')) {
-        selectBox(box);
-
-        // DEBUG - can be removed later
-        console.log('Box selected in design mode:', box.id, box.type);
+        console.log('Box drag initiated from:', e.target.className || e.target.tagName, '| Box:', box.id, box.type);
       }
     }
   });
@@ -2185,6 +2165,10 @@ function startResize(e, box, direction) {
 function updateCanvasHeight() {
   const currentPage = getCurrentPage();
 
+  // Note: This function is skipped when canvasSize === 'custom'
+  // When users manually resize the canvas via drag, they have full control
+  // and automatic height adjustments are not applied
+
   // Use state heights for header/footer, calculate boxes position for minimum
   let headerBoxBottom = 60; // Default min based on box positions
   let mainMaxBottom = 400;  // Default min height for main
@@ -2710,10 +2694,18 @@ function renderCurrentPage() {
 
   // Set canvas size (handle both preset and custom sizes)
   if (currentPage.canvasSize === 'custom' && currentPage.customWidth && currentPage.customHeight) {
+    // Fully custom size (both width and height)
     setCustomCanvasSize(currentPage.customWidth, currentPage.customHeight);
     console.log('[CANVAS-SIZE] Restored custom size for page:', currentPage.id);
   } else {
+    // Preset size (may have custom height preserved)
     setCanvasSize(currentPage.canvasSize || 'desktop');
+
+    // If preset has custom height, apply it
+    if (currentPage.customHeight) {
+      canvas.style.height = currentPage.customHeight + 'px';
+      console.log('[CANVAS-SIZE] Applied preset width with custom height:', currentPage.canvasSize, 'height:', currentPage.customHeight + 'px');
+    }
   }
 
   // Render header boxes
@@ -3155,7 +3147,12 @@ function startCanvasResize(e, direction) {
 
     console.log('[CANVAS-RESIZE] Resize complete. Final dimensions:', { width: finalWidth, height: finalHeight });
 
-    updateCanvasHeight();
+    // Note: updateCanvasHeight() is skipped when canvasSize === 'custom'
+    // Custom canvas sizes are user-controlled and should not be auto-adjusted
+    const currentPage = getCurrentPage();
+    if (!currentPage || currentPage.canvasSize !== 'custom') {
+      updateCanvasHeight();
+    }
   }
 
   document.addEventListener('mousemove', onMouseMove);
@@ -3166,16 +3163,24 @@ function startCanvasResize(e, direction) {
 // Canvas Size
 function setCanvasSize(size) {
   const currentPage = getCurrentPage();
+  const hadCustomHeight = currentPage && currentPage.customHeight;
+
   if (currentPage) {
     currentPage.canvasSize = size;
-    // Clear custom dimensions when switching to preset
+    // Clear only custom width when switching to preset (device widths are fixed)
+    // Preserve custom height (devices have scrollable/infinite height)
     currentPage.customWidth = null;
-    currentPage.customHeight = null;
   }
 
   canvas.className = size === 'desktop' ? '' : size;
   canvas.style.width = '';
-  canvas.style.height = '';
+
+  // Preserve custom height if it exists, otherwise clear height
+  if (hadCustomHeight && currentPage) {
+    canvas.style.height = currentPage.customHeight + 'px';
+  } else {
+    canvas.style.height = '';
+  }
 
   // Update active button
   document.querySelectorAll('.canvas-size-btn').forEach(btn => btn.classList.remove('active'));
@@ -3183,7 +3188,7 @@ function setCanvasSize(size) {
   if (size === 'tablet') tabletBtn.classList.add('active');
   if (size === 'mobile') mobileBtn.classList.add('active');
 
-  console.log('[CANVAS-SIZE] Preset size applied:', size);
+  console.log('[CANVAS-SIZE] Preset size applied:', size, 'Custom height preserved:', hadCustomHeight ? currentPage.customHeight + 'px' : 'none');
 }
 
 // @agent:CanvasResize:authority
