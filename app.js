@@ -1,6 +1,6 @@
 // QuickBox - Wireframe Mockup Tool
 // Version
-const APP_VERSION = "0.11.1";
+const APP_VERSION = "0.11.2";
 
 // @agent:AppConfig:authority
 // Configurable Constants
@@ -2465,6 +2465,45 @@ function deleteSelectedBox() {
   updateCanvasHeight();
 }
 
+// @agent:GroupDelete:authority
+// Delete a box directly without affecting group state or selection
+function deleteBoxDirectly(box) {
+  const currentPage = getCurrentPage();
+  if (!currentPage) return;
+
+  const boxEl = document.getElementById(box.id);
+  if (boxEl) {
+    const region = boxEl.dataset.region;
+
+    // Check if deleting from header/footer and not on Page 1
+    if ((region === 'header' || region === 'footer') && state.currentPageId !== 'page-1') {
+      console.warn('[DELETE-GROUP] Cannot delete header/footer box outside Page 1:', box.id);
+      return;
+    }
+
+    boxEl.remove();
+  }
+
+  // Remove from appropriate array
+  const removedFromPage = currentPage.boxes.filter(b => b.id !== box.id);
+  const removedFromHeader = state.header.boxes.filter(b => b.id !== box.id);
+  const removedFromFooter = state.footer.boxes.filter(b => b.id !== box.id);
+
+  let deletedRegion = '';
+  if (removedFromPage.length < currentPage.boxes.length) {
+    currentPage.boxes = removedFromPage;
+    deletedRegion = 'main';
+  } else if (removedFromHeader.length < state.header.boxes.length) {
+    state.header.boxes = removedFromHeader;
+    deletedRegion = 'header';
+  } else if (removedFromFooter.length < state.footer.boxes.length) {
+    state.footer.boxes = removedFromFooter;
+    deletedRegion = 'footer';
+  }
+
+  console.log('[DELETE-BOX] Element deleted:', box.type, box.id, box.name, deletedRegion);
+}
+
 // @agent:BoxDuplication:authority
 function duplicateBox(sourceBox) {
   console.log('[DUPLICATE-BOX] Duplicating box:', sourceBox.id, sourceBox.name);
@@ -2829,10 +2868,41 @@ function showContextMenu(e, boxId) {
   const deleteOption = document.createElement('div');
   deleteOption.className = 'context-menu-item';
   deleteOption.textContent = 'Delete';
-  deleteOption.addEventListener('click', () => {
-    selectBox(box);
-    deleteSelectedBox();
+  // @agent:GroupDelete:extension
+  deleteOption.addEventListener('click', (e) => {
+    e.stopPropagation();
+    console.log('[CONTEXT-MENU] Delete menu item clicked, event propagation stopped');
+
+    if (state.tempGroup.length > 1) {
+      // Delete all boxes in group
+      console.log('[DELETE-GROUP] Deleting group with', state.tempGroup.length, 'boxes');
+      console.log('[DELETE-GROUP] Group members:', state.tempGroup.map(b => b.id).join(', '));
+
+      pushHistory(); // Capture state before deletion
+
+      // Delete each box in the group
+      state.tempGroup.forEach((groupBox, index) => {
+        console.log('[DELETE-GROUP] Deleting box', index + 1, 'of', state.tempGroup.length, ':', groupBox.id);
+        deleteBoxDirectly(groupBox);
+      });
+
+      console.log('[DELETE-GROUP] Group deletion complete');
+
+      // Clear the group
+      state.tempGroup = [];
+      console.log('[DELETE-GROUP] Cleared temp group after deletion');
+
+      // Update UI
+      updateNavigator();
+      updateCanvasHeight();
+    } else {
+      // Delete single box
+      console.log('[DELETE-SINGLE] Deleting single box:', box.id);
+      selectBox(box);
+      deleteSelectedBox();
+    }
     contextMenu.remove();
+    console.log('[CONTEXT-MENU] Context menu removed');
   });
   contextMenu.appendChild(deleteOption);
 
