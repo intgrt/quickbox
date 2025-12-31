@@ -1,6 +1,6 @@
 # QuickBox
 
-**Version 0.11**
+**Version 0.11.1**
 
 A lightweight wireframe mockup tool for rapid web page prototyping.
 
@@ -83,11 +83,11 @@ Open `index.html` in a web browser to start using QuickBox.
 
 ## File Format
 
-QuickBox v0.11 saves files in JSON format with the following structure:
+QuickBox v0.11.1 saves files in JSON format with the following structure:
 
 ```json
 {
-  "version": "0.11",
+  "version": "0.11.1",
   "header": {
     "boxes": [...],
     "height": 80
@@ -108,7 +108,7 @@ QuickBox v0.11 saves files in JSON format with the following structure:
 }
 ```
 
-**Note**: v0.11 files are fully backward compatible with v0.7+ format. Files from v0.6 and earlier are not compatible due to header/footer structure changes. v0.11 maintains the same file format as previous versions with no breaking changes.
+**Note**: v0.11.1 files are fully backward compatible with v0.7+ format. Files from v0.6 and earlier are not compatible due to header/footer structure changes. v0.11.1 maintains the same file format as previous versions with no breaking changes.
 
 ## License
 

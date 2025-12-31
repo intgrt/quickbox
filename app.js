@@ -1,6 +1,6 @@
 // QuickBox - Wireframe Mockup Tool
 // Version
-const APP_VERSION = "0.11";
+const APP_VERSION = "0.11.1";
 
 // @agent:AppConfig:authority
 // Configurable Constants
@@ -2715,24 +2715,55 @@ function showContextMenu(e, boxId) {
   const duplicateOption = document.createElement('div');
   duplicateOption.className = 'context-menu-item';
   duplicateOption.textContent = 'Duplicate';
-  duplicateOption.addEventListener('click', () => {
+  // @agent:ContextMenuEventHandler:extension
+  duplicateOption.addEventListener('click', (e) => {
+    e.stopPropagation();
+    console.log('[CONTEXT-MENU] Duplicate menu item clicked, event propagation stopped');
+
     if (state.tempGroup.length > 1) {
       // Duplicate all boxes in group
       console.log('[DUPLICATE-GROUP] Duplicating group with', state.tempGroup.length, 'boxes');
       console.log('[DUPLICATE-GROUP] Group members:', state.tempGroup.map(b => b.id).join(', '));
 
+      // Track new duplicate box IDs created during duplication
+      const newDuplicateIds = [];
+      const boxCounterBefore = state.boxCounter;
+
       state.tempGroup.forEach((groupBox, index) => {
         console.log('[DUPLICATE-GROUP] Duplicating box', index + 1, 'of', state.tempGroup.length, ':', groupBox.id);
         duplicateBox(groupBox);
+        // Each duplicateBox() increments boxCounter, so new ID is box-{boxCounter}
+        newDuplicateIds.push(`box-${state.boxCounter}`);
       });
 
-      console.log('[DUPLICATE-GROUP] Group duplication complete');
+      console.log('[DUPLICATE-GROUP] Group duplication complete. New duplicate IDs:', newDuplicateIds.join(', '));
+
+      // Replace original group with newly created duplicates
+      // Find the new duplicate boxes in the data structure
+      const newDuplicateBoxes = [];
+      newDuplicateIds.forEach(duplicateId => {
+        const boxInfo = findBoxInRegions(duplicateId);
+        if (boxInfo && boxInfo.box) {
+          newDuplicateBoxes.push(boxInfo.box);
+          console.log('[DUPLICATE-GROUP] Added duplicate box to new group:', duplicateId);
+        }
+      });
+
+      // Replace tempGroup with new duplicates and update visuals
+      state.tempGroup = newDuplicateBoxes;
+      console.log('[DUPLICATE-GROUP] Replaced original group with', state.tempGroup.length, 'new duplicates');
+      console.log('[DUPLICATE-GROUP] New group members:', state.tempGroup.map(b => b.id).join(', '));
+
+      // Update group visuals to show new duplicates as grouped
+      updateGroupVisualsOnCanvas();
+      console.log('[DUPLICATE-GROUP] Group visuals updated for new duplicates');
     } else {
       // Duplicate single box
       console.log('[DUPLICATE-SINGLE] Duplicating single box:', box.id);
       duplicateBox(box);
     }
     contextMenu.remove();
+    console.log('[CONTEXT-MENU] Context menu removed');
   });
   contextMenu.appendChild(duplicateOption);
 
