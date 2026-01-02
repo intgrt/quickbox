@@ -694,18 +694,18 @@ function renderBox(box, region = 'main') {
 
   if (box.type === 'text') {
     content.contentEditable = state.currentMode === 'design' ? 'true' : 'false';
-    content.textContent = box.content;
+    content.innerHTML = box.content;
     content.style.fontSize = box.fontSize + 'px';
     content.style.fontFamily = box.fontFamily;
 
     // Capture state when text editing finishes (blur event)
     content.addEventListener('blur', () => {
-      box.content = content.textContent;
+      box.content = content.innerHTML;
       pushHistory();
     });
   } else if (box.type === 'button') {
     content.contentEditable = state.currentMode === 'design' ? 'true' : 'false';
-    content.textContent = box.content;
+    content.innerHTML = box.content;
     content.style.fontSize = box.fontSize + 'px';
     content.style.fontFamily = box.fontFamily;
     content.style.display = 'flex';
@@ -714,7 +714,7 @@ function renderBox(box, region = 'main') {
 
     // Capture state when button text editing finishes (blur event)
     content.addEventListener('blur', () => {
-      box.content = content.textContent;
+      box.content = content.innerHTML;
       pushHistory();
     });
   } else if (box.type === 'image') {
