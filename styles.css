@@ -395,7 +395,7 @@ label {
 }
 
 .box-content {
-  padding: 0px;
+  padding: 3px;
   outline: none;
   height: 100%;
   width: 100%;
@@ -403,6 +403,8 @@ label {
   font-size: 16px;
   font-family: 'Architects Daughter', cursive;
   box-sizing: border-box;
+  white-space: pre-wrap;
+  word-wrap: break-word;
 }
 
 .box-content[contenteditable="true"]:empty:before {
