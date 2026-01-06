@@ -1,6 +1,6 @@
 // QuickBox - Wireframe Mockup Tool
 // Version
-const APP_VERSION = "0.12.2";
+const APP_VERSION = "1.0";
 
 // @agent:AppConfig:authority
 // Configurable Constants
@@ -3029,28 +3029,27 @@ function updateFontSize() {
   content.style.fontSize = fontSizeSelect.value + 'px';
 }
 
-// @agent:UndoSystem:extension
-// Handle Image Upload
+// @agent:ImageManagement:authority
+// Handle Image Selection - stores relative path to media folder
 function handleImageUpload(e) {
   const file = e.target.files[0];
   if (!file) return;
 
-  const reader = new FileReader();
-  reader.onload = (event) => {
-    if (state.selectedBox && state.selectedBox.type === 'image') {
-      // @agent:UndoSystem:extension
-      pushHistory(); // Capture state before image upload
+  if (state.selectedBox && state.selectedBox.type === 'image') {
+    // @agent:UndoSystem:extension
+    pushHistory(); // Capture state before image selection
 
-      state.selectedBox.content = event.target.result;
-      const boxEl = document.getElementById(state.selectedBox.id);
-      const content = boxEl.querySelector('.box-content');
-      content.innerHTML = '';
-      const img = document.createElement('img');
-      img.src = event.target.result;
-      content.appendChild(img);
-    }
-  };
-  reader.readAsDataURL(file);
+    // Store relative path (media/filename.png) instead of base64
+    state.selectedBox.content = "media/" + file.name;
+
+    const boxEl = document.getElementById(state.selectedBox.id);
+    const content = boxEl.querySelector('.box-content');
+    content.innerHTML = '';
+    const img = document.createElement('img');
+    img.src = state.selectedBox.content;
+    content.appendChild(img);
+  }
+
   imageInput.value = '';
 }
 

@@ -1,6 +1,6 @@
 # QuickBox
 
-**Version:** 0.12.2
+**Version:** 1.0
 **License:** Apache License 2.0
 **Copyright:** 2025 Intelliscape Interactive Corp.
 

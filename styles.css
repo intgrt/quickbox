@@ -790,6 +790,7 @@ label {
   box-sizing: border-box;
 }
 
+/* @agent:GroupSelection:extension */
 /* Group Member Visual Indicator */
 .in-temp-group {
   outline: 3px dashed #0066ff !important;

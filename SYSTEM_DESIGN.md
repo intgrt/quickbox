@@ -1,6 +1,6 @@
 # QuickBox System Design & Architecture
-**Version:** 0.12.2
-**Last Updated:** 2025-12-31
+**Version:** 1.0
+**Last Updated:** 2026-01-06
 **Purpose:** Comprehensive system design document for implementing features and understanding codebase structure
 
 ---
@@ -140,6 +140,8 @@ Every box (regardless of type) has this structure:
   text: 'Enter text here',  // For text boxes
   fontSize: 16,             // Font size in pixels
   fontFamily: "'Architects Daughter', cursive",
+
+  content: 'media/logo.png', // For image boxes - relative path to /media folder
 
   link: null,               // Link target: { type: 'page', pageId: '...' } or { type: 'anchor', text: '...' }
 
@@ -396,10 +398,14 @@ Undo History Recorded
 - Can be linked to pages/anchors
 
 #### Image Box
-- Placeholder image rendering
-- User can upload image to replace placeholder
-- Click box → file picker → image loaded as data URI
-- Stored in `imageData` property (base64)
+- Displays images from `/media` folder
+- User workflow:
+  1. User manually copies image files to `/media` folder (prerequisite)
+  2. Click 📷 icon in Design mode → file picker opens
+  3. User navigates to `/media` folder and selects image
+  4. App stores relative path (e.g., `"media/logo.png"`) in `box.content`
+- No base64 encoding - stores filename path only (reduces file size and token usage)
+- Renders as `<img src="media/filename.png">`
 
 #### Menu Box
 - Hierarchical menu structure
@@ -508,7 +514,7 @@ These modify canvas dimensions via drag, not box dimensions.
 
 ```json
 {
-  "version": "0.12.2",
+  "version": "1.0",
   "header": {
     "boxes": [
       {
@@ -548,9 +554,13 @@ These modify canvas dimensions via drag, not box dimensions.
 
 ### Backward Compatibility
 
-- **v0.12.2 files:** Fully compatible with v0.12.1 and v0.7+
+- **v1.0 files:** Image boxes now store relative paths (`"media/logo.png"`) instead of base64 data
+- **v0.12.x files with base64 images:** Will load but images stored as base64 strings may not render correctly
+- **v0.7+ files (non-image boxes):** Fully compatible
 - **v0.6 and earlier:** Not compatible (due to header/footer structure changes)
 - **Version checks:** File version compared on load to warn about incompatibility
+
+**Breaking Change in v1.0:** Image storage changed from base64 to relative file paths. Old mockup files with embedded base64 images will need images re-linked from `/media` folder.
 
 ### Save/Load Process
 
@@ -710,6 +720,7 @@ const boxInBounds =
 - **Lines 462-479:** App entry point and initialization
 - **Lines 481-499:** Keyboard shortcuts (Ctrl+Z, Ctrl+Y)
 - **Lines 500+:** Box creation, rendering, editing, navigation functions
+- **Lines 3032-3054:** Image selection handler (stores media/ relative paths)
 
 ### styles.css (Key Sections)
 - **Lines 1-4:** Global box-sizing
@@ -730,7 +741,7 @@ const boxInBounds =
 - Hand-drawn Balsamiq aesthetic
 
 ### Backward Compatibility
-- File format unchanged since v0.12.1
+- **v1.0 breaking change:** Image storage moved from base64 to file paths
 - Version checks prevent incompatible file loads
 - Counters recalculated on load for robustness
 
@@ -747,7 +758,13 @@ const boxInBounds =
 ### Progressive Enhancement
 - Works in any modern browser
 - No dependencies on external libraries
-- File picker API used for save/load
+- File picker API used for save/load and image selection
+
+### Image Asset Management
+- Images stored externally in `/media` folder (not embedded)
+- File paths stored as relative references (e.g., `"media/logo.png"`)
+- Minimizes JSON file size and token usage during development
+- User responsible for maintaining `/media` folder alongside mockup files
 
 ---
 
