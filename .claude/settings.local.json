@@ -1,14 +1,3 @@
 {
-  "permissions": {
-    "allow": [
-      "mcp__chrome-devtools__click",
-      "mcp__chrome-devtools__list_console_messages",
-      "mcp__chrome-devtools__evaluate_script",
-      "mcp__chrome-devtools__take_snapshot",
-      "mcp__chrome-devtools__navigate_page",
-      "mcp__chrome-devtools__list_pages",
-      "mcp__chrome-devtools__select_page",
-      "mcp__chrome-devtools__take_screenshot"
-    ]
-  }
+  "_comment": "NOTE: This file is not currently used. All Claude Code settings for this project are configured in .claude/settings.json. This file exists as a template for future use if multiple developers join the team. settings.local.json would be used for: personal machine-specific overrides, local API keys and credentials, individual developer preferences, and machine-specific configurations. It is automatically gitignored and not shared with team members."
 }

@@ -1,0 +1,16 @@
+{
+  "model": "default",
+  "permissions": {
+    "deny": [
+      "Read(.env*)",
+      "Read(.secrets*)",
+      "Bash(sudo:*)",
+      "Bash(rm -rf:*)"
+    ]
+  },
+  "enableAllProjectMcpServers": true,
+  "env": {
+    "NODE_ENV": "development",
+    "DEBUG": "true"
+  }
+}
