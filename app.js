@@ -1,6 +1,6 @@
 // QuickBox - Wireframe Mockup Tool
 // Version
-const APP_VERSION = "1.0";
+const APP_VERSION = "1.1";
 
 // @agent:AppConfig:authority
 // Configurable Constants
@@ -32,7 +32,11 @@ const state = {
   zIndexCounter: 1,
   currentMode: 'design', // 'design' or 'navigate'
   tempGroup: [], // Temporary group for dragging multiple boxes
-  groupSelectMode: false // Flag for rectangle selection active
+  groupSelectMode: false, // Flag for rectangle selection active
+  themes: {
+    active: 'sketch',
+    palettes: {}
+  }
 };
 
 // @agent:UndoSystem:authority
@@ -183,6 +187,81 @@ function getCurrentPage() {
   return state.pages.find(p => p.id === state.currentPageId);
 }
 
+// @agent:PaletteSystem:authority
+// Palette Management Functions
+
+// Load palette manifest from palettes/index.json
+async function loadPaletteManifest() {
+  try {
+    const response = await fetch('palettes/index.json');
+    if (!response.ok) {
+      console.error('Failed to load palette manifest');
+      return { palettes: [] };
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Error loading palette manifest:', error);
+    return { palettes: [] };
+  }
+}
+
+// Apply palette by ID - loads palette JSON and sets CSS variables
+async function applyPalette(paletteId) {
+  console.log(`[Palette] Applying palette: ${paletteId}`);
+
+  try {
+    const response = await fetch(`palettes/${paletteId}.json`);
+    if (!response.ok) {
+      console.error(`[Palette] Failed to load palette file: ${paletteId}.json`);
+      return;
+    }
+
+    const palette = await response.json();
+    console.log(`[Palette] Loaded palette data:`, palette);
+
+    // Set canvas and region background colors
+    document.documentElement.style.setProperty('--canvas-bg', palette.canvas);
+    document.documentElement.style.setProperty('--header-bg', palette.header);
+    document.documentElement.style.setProperty('--footer-bg', palette.footer);
+    console.log(`[Palette] Set canvas/region colors - Canvas: ${palette.canvas}, Header: ${palette.header}, Footer: ${palette.footer}`);
+
+    // Set element colors for each element type
+    for (const [elementType, colors] of Object.entries(palette.elements)) {
+      document.documentElement.style.setProperty(`--${elementType}-fill`, colors.fill);
+      document.documentElement.style.setProperty(`--${elementType}-border`, colors.border);
+      document.documentElement.style.setProperty(`--${elementType}-color`, colors.textColor);
+      console.log(`[Palette] Set ${elementType} colors - Fill: ${colors.fill}, Border: ${colors.border}, Text: ${colors.textColor}`);
+    }
+
+    // Update state to track active palette
+    const previousPalette = state.themes.active;
+    state.themes.active = paletteId;
+    console.log(`[Palette] Updated active palette in state: ${previousPalette} -> ${paletteId}`);
+
+    console.log(`[Palette] ✓ Palette "${palette.name}" applied successfully`);
+  } catch (error) {
+    console.error('[Palette] Error applying palette:', error);
+  }
+}
+
+// Handle palette selector change event
+function handlePaletteChange(event) {
+  const selectedPaletteId = event.target.value;
+  console.log(`[Palette] User selected palette from dropdown: ${selectedPaletteId}`);
+
+  // Check for state conflicts
+  if (state.groupSelectMode) {
+    console.log('[Palette] Group select mode is active - palette change will not affect this mode');
+  }
+
+  if (state.selectedBox) {
+    console.log(`[Palette] Box currently selected: ${state.selectedBox} - palette will apply to all boxes`);
+  }
+
+  // Apply the selected palette
+  applyPalette(selectedPaletteId);
+}
+
 // DOM Elements
 const canvas = document.getElementById('canvas');
 const elementsList = document.getElementById('elementsList');
@@ -219,6 +298,7 @@ const fontSizeSelect = document.getElementById('fontSizeSelect');
 const desktopBtn = document.getElementById('desktopBtn');
 const tabletBtn = document.getElementById('tabletBtn');
 const mobileBtn = document.getElementById('mobileBtn');
+const paletteSelector = document.getElementById('paletteSelector');
 const addPageBtn = document.getElementById('addPageBtn');
 const designModeBtn = document.getElementById('designModeBtn');
 const navigateModeBtn = document.getElementById('navigateModeBtn');
@@ -241,6 +321,7 @@ fontSizeSelect.addEventListener('change', updateFontSize);
 desktopBtn.addEventListener('click', () => setCanvasSize('desktop'));
 tabletBtn.addEventListener('click', () => setCanvasSize('tablet'));
 mobileBtn.addEventListener('click', () => setCanvasSize('mobile'));
+paletteSelector.addEventListener('change', handlePaletteChange);
 addPageBtn.addEventListener('click', addPage);
 designModeBtn.addEventListener('click', () => setMode('design'));
 navigateModeBtn.addEventListener('click', () => setMode('navigate'));
@@ -461,17 +542,56 @@ canvas.addEventListener('contextmenu', (e) => {
 
 // @agent:App:entry
 // Initialize
-initializeState();
-updateNavigator();
-renderCurrentPage();
-updatePageIdentifier();
-updateModeUI();
+async function initializeApp() {
+  console.log('[App] Starting QuickBox initialization...');
 
-// @agent:UndoSystem:extension
-// Capture initial state after DOM is ready
-setTimeout(() => {
-  pushHistory();
-}, 100);
+  // Initialize state
+  initializeState();
+  console.log('[App] State initialized');
+
+  // Load and populate palettes
+  console.log('[App] Loading palette manifest...');
+  const manifest = await loadPaletteManifest();
+  console.log('[App] Palette manifest loaded:', manifest);
+
+  if (manifest.palettes.length > 0) {
+    // Populate palette selector dropdown
+    paletteSelector.innerHTML = '';
+    manifest.palettes.forEach(palette => {
+      const option = document.createElement('option');
+      option.value = palette.id;
+      option.textContent = palette.name;
+      paletteSelector.appendChild(option);
+      console.log(`[App] Added palette to selector: ${palette.name} (${palette.id})`);
+    });
+
+    // Apply default palette (sketch)
+    const defaultPaletteId = state.themes.active || 'sketch';
+    console.log(`[App] Applying default palette: ${defaultPaletteId}`);
+    await applyPalette(defaultPaletteId);
+    paletteSelector.value = defaultPaletteId;
+  } else {
+    console.warn('[App] No palettes found in manifest');
+  }
+
+  // Render UI
+  updateNavigator();
+  renderCurrentPage();
+  updatePageIdentifier();
+  updateModeUI();
+  console.log('[App] UI rendered');
+
+  // Capture initial state after DOM is ready
+  setTimeout(() => {
+    pushHistory();
+    console.log('[App] Initial undo snapshot captured');
+  }, 100);
+
+  console.log('[App] ✓ QuickBox initialization complete');
+}
+
+// Start app initialization
+initializeApp();
 
 // Update UI with version number
 document.title = `QuickBox v${APP_VERSION} - Wireframe Mockup Tool`;
@@ -670,6 +790,8 @@ function renderBox(box, region = 'main') {
 
   const boxEl = document.createElement('div');
   boxEl.className = 'box';
+  if (box.type === 'text') boxEl.classList.add('box-text');
+  if (box.type === 'image') boxEl.classList.add('box-image');
   if (box.type === 'menu') boxEl.classList.add('menu-box');
   if (box.type === 'button') boxEl.classList.add('button-box');
   if (box.type === 'accordion') boxEl.classList.add('accordion-box');
@@ -696,7 +818,7 @@ function renderBox(box, region = 'main') {
     content.contentEditable = state.currentMode === 'design' ? 'true' : 'false';
     content.innerHTML = box.content;
     content.style.fontSize = box.fontSize + 'px';
-    content.style.fontFamily = box.fontFamily;
+    // fontFamily now uses CSS variable --global-font
 
     // Capture state when text editing finishes (blur event)
     content.addEventListener('blur', () => {
@@ -707,7 +829,7 @@ function renderBox(box, region = 'main') {
     content.contentEditable = state.currentMode === 'design' ? 'true' : 'false';
     content.innerHTML = box.content;
     content.style.fontSize = box.fontSize + 'px';
-    content.style.fontFamily = box.fontFamily;
+    // fontFamily now uses CSS variable --global-font
     content.style.display = 'flex';
     content.style.alignItems = 'center';
     content.style.justifyContent = 'center';
@@ -1161,7 +1283,7 @@ function renderAccordionContent(content, box) {
     titleText.className = 'accordion-title-text';
     titleText.textContent = item.title;
     titleText.style.fontSize = box.fontSize + 'px';
-    titleText.style.fontFamily = box.fontFamily;
+    // fontFamily now uses CSS variable --global-font
 
     // Append: INDICATOR FIRST, then title
     header.appendChild(indicator);
@@ -1173,7 +1295,7 @@ function renderAccordionContent(content, box) {
     body.style.display = item.isExpanded ? 'block' : 'none';
     body.textContent = item.body;
     body.style.fontSize = box.fontSize + 'px';
-    body.style.fontFamily = box.fontFamily;
+    // fontFamily now uses CSS variable --global-font
 
     // Toggle logic (works in both design and navigate modes)
     header.addEventListener('click', (e) => {
@@ -3002,17 +3124,15 @@ function handleLinkClick(linkTo) {
 }
 
 // @agent:UndoSystem:extension
-// Update Font
+// Update Font - applies globally to all elements
 function updateFont() {
-  if (!state.selectedBox || (state.selectedBox.type !== 'text' && state.selectedBox.type !== 'button')) return;
+  const selectedFont = fontSelect.value;
+  console.log(`[Font] Setting global font to: ${selectedFont}`);
 
-  // @agent:UndoSystem:extension
-  pushHistory(); // Capture state before font change
+  // Set global CSS variable - affects all box content
+  document.documentElement.style.setProperty('--global-font', selectedFont);
 
-  state.selectedBox.fontFamily = fontSelect.value;
-  const boxEl = document.getElementById(state.selectedBox.id);
-  const content = boxEl.querySelector('.box-content');
-  content.style.fontFamily = fontSelect.value;
+  console.log(`[Font] ✓ Global font applied to all elements`);
 }
 
 // @agent:UndoSystem:extension

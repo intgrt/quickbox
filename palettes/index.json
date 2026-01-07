@@ -1,0 +1,19 @@
+{
+  "palettes": [
+    {
+      "id": "sketch",
+      "name": "Sketch",
+      "file": "sketch.json"
+    },
+    {
+      "id": "botanical-sanctuary",
+      "name": "Botanical Sanctuary",
+      "file": "botanical-sanctuary.json"
+    },
+    {
+      "id": "golden-hour",
+      "name": "Golden Hour",
+      "file": "golden-hour.json"
+    }
+  ]
+}

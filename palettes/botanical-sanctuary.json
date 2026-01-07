@@ -1,0 +1,34 @@
+{
+  "name": "Botanical Sanctuary",
+  "notes": "Calming green tones inspired by nature",
+  "canvas": "#e9e4da",
+  "header": "#f5f7f2",
+  "footer": "#f5f7f2",
+  "elements": {
+    "text": {
+      "fill": "#cad2c5",
+      "border": "#2f3e46",
+      "textColor": "#2f3e46"
+    },
+    "image": {
+      "fill": "#cad2c5",
+      "border": "#52796f",
+      "textColor": "#2f3e46"
+    },
+    "menu": {
+      "fill": "#cad2c5",
+      "border": "#84a98c",
+      "textColor": "#2f3e46"
+    },
+    "button": {
+      "fill": "#52796f",
+      "border": "#2f3e46",
+      "textColor": "#ffffff"
+    },
+    "accordion": {
+      "fill": "#f5f7f2",
+      "border": "#84a98c",
+      "textColor": "#2f3e46"
+    }
+  }
+}
