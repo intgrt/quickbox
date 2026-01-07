@@ -1069,3 +1069,181 @@ label {
 .accordion-editor-controls button:hover {
   background: #e0e0e0;
 }
+
+/* @agent:PaletteEditor:authority */
+/* Palette Editor Panel */
+.palette-editor-panel {
+  position: fixed;
+  top: 80px;
+  right: 20px;
+  background: #fff;
+  border: 3px solid #333;
+  box-shadow: 5px 5px 0 #333;
+  padding: 12px;
+  width: 450px;
+  max-height: calc(100vh - 120px);
+  overflow-y: auto;
+  z-index: 10000;
+  font-family: 'Architects Daughter', cursive;
+  cursor: move;
+}
+
+.palette-editor-panel.hidden {
+  display: none !important;
+}
+
+.palette-editor-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid #333;
+  cursor: move;
+}
+
+.palette-editor-header h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.palette-editor-content {
+  margin-bottom: 12px;
+}
+
+.editor-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.editor-row label {
+  min-width: 90px;
+  font-weight: bold;
+  font-size: 12px;
+}
+
+.editor-section {
+  margin-bottom: 12px;
+  padding: 8px;
+  border: 2px solid #ddd;
+  background: #f9f9f9;
+}
+
+.editor-section h4 {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+  color: #333;
+  border-bottom: 1px solid #ccc;
+  padding-bottom: 4px;
+}
+
+.palette-name-input {
+  flex: 1;
+  padding: 6px;
+  border: 2px solid #333;
+  font-family: 'Architects Daughter', cursive;
+  font-size: 12px;
+  box-sizing: border-box;
+}
+
+.palette-notes-input {
+  flex: 1;
+  padding: 6px;
+  border: 2px solid #333;
+  font-family: 'Architects Daughter', cursive;
+  font-size: 12px;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.palette-editor-color-picker {
+  width: 40px;
+  height: 28px;
+  border: 2px solid #333;
+  cursor: pointer;
+  padding: 2px;
+}
+
+.palette-editor-color-input {
+  flex: 1;
+  padding: 6px;
+  border: 2px solid #333;
+  font-family: 'Architects Daughter', cursive;
+  font-size: 12px;
+  text-transform: uppercase;
+  box-sizing: border-box;
+}
+
+.palette-editor-color-input.invalid {
+  border-color: #d32f2f;
+  background: #ffebee;
+}
+
+.palette-editor-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+  padding-top: 10px;
+  border-top: 2px solid #ddd;
+}
+
+.btn-action {
+  padding: 6px 10px;
+  background: #fff;
+  border: 2px solid #333;
+  cursor: pointer;
+  font-family: 'Architects Daughter', cursive;
+  font-size: 12px;
+  box-shadow: 2px 2px 0 #333;
+}
+
+.btn-action:hover {
+  background: #f0f0f0;
+}
+
+.btn-action:active {
+  box-shadow: 1px 1px 0 #333;
+  transform: translate(1px, 1px);
+}
+
+.btn-primary {
+  padding: 6px 10px;
+  background: #4caf50;
+  color: #fff;
+  border: 2px solid #333;
+  cursor: pointer;
+  font-family: 'Architects Daughter', cursive;
+  font-size: 12px;
+  font-weight: bold;
+  box-shadow: 2px 2px 0 #333;
+}
+
+.btn-primary:hover {
+  background: #45a049;
+}
+
+.btn-primary:active {
+  box-shadow: 1px 1px 0 #333;
+  transform: translate(1px, 1px);
+}
+
+.btn-secondary {
+  padding: 6px 10px;
+  background: #fff;
+  border: 2px solid #333;
+  cursor: pointer;
+  font-family: 'Architects Daughter', cursive;
+  font-size: 12px;
+  box-shadow: 2px 2px 0 #333;
+}
+
+.btn-secondary:hover {
+  background: #e0e0e0;
+}
+
+.btn-secondary:active {
+  box-shadow: 1px 1px 0 #333;
+  transform: translate(1px, 1px);
+}

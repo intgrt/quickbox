@@ -262,6 +262,426 @@ function handlePaletteChange(event) {
   applyPalette(selectedPaletteId);
 }
 
+// @agent:PaletteEditor:extension
+// Palette Editor Functions
+
+// Validate hex color format (#RRGGBB)
+function validateHexColor(hex) {
+  const hexPattern = /^#[0-9A-Fa-f]{6}$/;
+  return hexPattern.test(hex);
+}
+
+// Convert input ID to CSS variable name (e.g., "textFill" -> "--text-fill")
+function inputIdToCssVar(inputId) {
+  return '--' + inputId.replace(/([A-Z])/g, '-$1').toLowerCase();
+}
+
+// Sync color picker to text input
+function syncColorPicker(picker) {
+  const targetInputId = picker.dataset.target;
+  const textInput = document.getElementById(targetInputId);
+
+  picker.addEventListener('input', (e) => {
+    textInput.value = e.target.value.toUpperCase();
+  });
+}
+
+// Sync text input to color picker
+function syncTextInput(textInput) {
+  const picker = document.querySelector(`[data-target="${textInput.id}"]`);
+
+  textInput.addEventListener('input', (e) => {
+    const hex = e.target.value.trim().toUpperCase();
+    if (validateHexColor(hex)) {
+      picker.value = hex;
+      textInput.classList.remove('invalid');
+    }
+  });
+}
+
+// Initialize all color picker syncing
+function syncAllColorPickers() {
+  document.querySelectorAll('.palette-editor-color-picker').forEach(syncColorPicker);
+  document.querySelectorAll('.palette-editor-color-input').forEach(syncTextInput);
+}
+
+// Apply background colors to canvas regions
+function applyBackgroundColors() {
+  const canvas = document.getElementById('canvas');
+  const headerRegion = document.getElementById('header-region');
+  const footerRegion = document.getElementById('footer-region');
+
+  const canvasBgValue = document.getElementById('canvasBg').value;
+  const headerBgValue = document.getElementById('headerBg').value;
+  const footerBgValue = document.getElementById('footerBg').value;
+
+  if (canvasBgValue) canvas.style.backgroundColor = canvasBgValue;
+  if (headerRegion && headerBgValue) headerRegion.style.backgroundColor = headerBgValue;
+  if (footerRegion && footerBgValue) footerRegion.style.backgroundColor = footerBgValue;
+}
+
+// Apply palette preview (Apply button handler)
+function applyPalettePreview() {
+  const colorInputs = document.querySelectorAll('.palette-editor-color-input');
+
+  let allValid = true;
+  const updates = [];
+
+  // Validate all inputs first
+  colorInputs.forEach(input => {
+    const hex = input.value.trim().toUpperCase();
+    if (!validateHexColor(hex)) {
+      input.classList.add('invalid');
+      allValid = false;
+    } else {
+      input.classList.remove('invalid');
+      updates.push({
+        cssVar: inputIdToCssVar(input.id),
+        value: hex
+      });
+    }
+  });
+
+  // If all valid, apply changes
+  if (allValid) {
+    updates.forEach(update => {
+      document.documentElement.style.setProperty(update.cssVar, update.value);
+    });
+
+    // Also update canvas/header/footer backgrounds
+    applyBackgroundColors();
+
+    console.log('[PaletteEditor] Preview applied successfully');
+  } else {
+    alert('Please correct invalid hex color values (marked in red).\nHex colors must be in format: #RRGGBB');
+  }
+}
+
+// Repopulate editor form with palette data
+async function repopulateEditorForm(paletteId) {
+  try {
+    const response = await fetch(`palettes/${paletteId}.json`);
+    if (!response.ok) {
+      console.error(`Failed to load palette: ${paletteId}`);
+      return;
+    }
+
+    const palette = await response.json();
+
+    // Populate background colors
+    document.getElementById('canvasBg').value = palette.canvas.toUpperCase();
+    document.getElementById('headerBg').value = palette.header.toUpperCase();
+    document.getElementById('footerBg').value = palette.footer.toUpperCase();
+
+    // Populate element colors
+    Object.keys(palette.elements).forEach(elementType => {
+      const element = palette.elements[elementType];
+      const fillInput = document.getElementById(`${elementType}Fill`);
+      const borderInput = document.getElementById(`${elementType}Border`);
+      const colorInput = document.getElementById(`${elementType}Color`);
+
+      if (fillInput) fillInput.value = element.fill.toUpperCase();
+      if (borderInput) borderInput.value = element.border.toUpperCase();
+      if (colorInput) colorInput.value = element.textColor.toUpperCase();
+    });
+
+    // Sync all color pickers with new values
+    document.querySelectorAll('.palette-editor-color-picker').forEach(picker => {
+      const targetInput = document.getElementById(picker.dataset.target);
+      if (targetInput && validateHexColor(targetInput.value)) {
+        picker.value = targetInput.value;
+      }
+    });
+
+    console.log(`[PaletteEditor] Form repopulated with palette: ${paletteId}`);
+  } catch (error) {
+    console.error('[PaletteEditor] Error repopulating form:', error);
+  }
+}
+
+// Undo palette preview (Undo button handler)
+async function undoPalettePreview() {
+  if (paletteEditorState.originalPaletteId) {
+    await applyPalette(paletteEditorState.originalPaletteId);
+    await repopulateEditorForm(paletteEditorState.originalPaletteId);
+    console.log('[PaletteEditor] Preview reverted to original palette');
+  }
+}
+
+// Open palette editor
+async function openPaletteEditor() {
+  const currentPaletteId = state.themes.active;
+
+  if (!currentPaletteId) {
+    alert('No palette is currently active.');
+    return;
+  }
+
+  paletteEditorState.originalPaletteId = currentPaletteId;
+  paletteEditorState.isEditorOpen = true;
+
+  // Load current palette data
+  try {
+    const response = await fetch(`palettes/${currentPaletteId}.json`);
+    if (!response.ok) {
+      alert(`Failed to load palette: ${currentPaletteId}`);
+      return;
+    }
+
+    const palette = await response.json();
+
+    // Set palette name in header
+    editorPaletteName.textContent = palette.name;
+
+    // Populate form fields
+    newPaletteName.value = palette.name + ' (Custom)';
+    paletteNotes.value = palette.notes || '';
+
+    await repopulateEditorForm(currentPaletteId);
+
+    // Initialize color picker syncing
+    syncAllColorPickers();
+
+    // Show editor panel
+    paletteEditorPanel.classList.remove('hidden');
+
+    console.log(`[PaletteEditor] Opened editor for palette: ${currentPaletteId}`);
+  } catch (error) {
+    console.error('[PaletteEditor] Error opening editor:', error);
+    alert('Error opening palette editor. Please try again.');
+  }
+}
+
+// Close palette editor
+function closePaletteEditor() {
+  paletteEditorPanel.classList.add('hidden');
+  paletteEditorState.originalPaletteId = null;
+  paletteEditorState.isEditorOpen = false;
+  console.log('[PaletteEditor] Editor closed');
+}
+
+// Generate palette ID from name (e.g., "My Palette" -> "my-palette")
+function generatePaletteId(name) {
+  return name.toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .trim();
+}
+
+// Build palette JSON object from form data
+function buildPaletteJSON() {
+  return {
+    name: newPaletteName.value.trim(),
+    notes: paletteNotes.value.trim(),
+    canvas: document.getElementById('canvasBg').value.toUpperCase(),
+    header: document.getElementById('headerBg').value.toUpperCase(),
+    footer: document.getElementById('footerBg').value.toUpperCase(),
+    elements: {
+      text: {
+        fill: document.getElementById('textFill').value.toUpperCase(),
+        border: document.getElementById('textBorder').value.toUpperCase(),
+        textColor: document.getElementById('textColor').value.toUpperCase()
+      },
+      image: {
+        fill: document.getElementById('imageFill').value.toUpperCase(),
+        border: document.getElementById('imageBorder').value.toUpperCase(),
+        textColor: document.getElementById('imageColor').value.toUpperCase()
+      },
+      menu: {
+        fill: document.getElementById('menuFill').value.toUpperCase(),
+        border: document.getElementById('menuBorder').value.toUpperCase(),
+        textColor: document.getElementById('menuColor').value.toUpperCase()
+      },
+      button: {
+        fill: document.getElementById('buttonFill').value.toUpperCase(),
+        border: document.getElementById('buttonBorder').value.toUpperCase(),
+        textColor: document.getElementById('buttonColor').value.toUpperCase()
+      },
+      accordion: {
+        fill: document.getElementById('accordionFill').value.toUpperCase(),
+        border: document.getElementById('accordionBorder').value.toUpperCase(),
+        textColor: document.getElementById('accordionColor').value.toUpperCase()
+      }
+    }
+  };
+}
+
+// @agent:PaletteManifest:authority
+// Update palette manifest (add or remove palette entry)
+async function updatePaletteManifest(action, paletteData) {
+  try {
+    const manifest = await loadPaletteManifest();
+
+    if (action === 'add') {
+      // Check if palette ID already exists
+      const exists = manifest.palettes.some(p => p.id === paletteData.id);
+      if (exists) {
+        return { success: false, error: 'Palette ID already exists' };
+      }
+
+      manifest.palettes.push({
+        id: paletteData.id,
+        name: paletteData.name,
+        file: paletteData.file
+      });
+
+      console.log(`[PaletteManifest] Added palette: ${paletteData.id}`);
+    } else if (action === 'remove') {
+      manifest.palettes = manifest.palettes.filter(p => p.id !== paletteData.id);
+      console.log(`[PaletteManifest] Removed palette: ${paletteData.id}`);
+    }
+
+    // In a real implementation, this would save to file system
+    // For now, we'll use localStorage as a workaround
+    localStorage.setItem('paletteManifest', JSON.stringify(manifest));
+
+    return { success: true, manifest };
+  } catch (error) {
+    console.error('[PaletteManifest] Error updating manifest:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+// Save palette as new file
+async function savePaletteAs() {
+  const name = newPaletteName.value.trim();
+
+  if (!name) {
+    alert('Please enter a palette name.');
+    return;
+  }
+
+  // Validate all color inputs before saving
+  const colorInputs = document.querySelectorAll('.palette-editor-color-input');
+  let allValid = true;
+
+  colorInputs.forEach(input => {
+    if (!validateHexColor(input.value.trim())) {
+      input.classList.add('invalid');
+      allValid = false;
+    }
+  });
+
+  if (!allValid) {
+    alert('Please correct invalid hex color values before saving.');
+    return;
+  }
+
+  const paletteId = generatePaletteId(name);
+  const paletteJSON = buildPaletteJSON();
+
+  // Check if palette ID already exists
+  const manifest = await loadPaletteManifest();
+  const exists = manifest.palettes.some(p => p.id === paletteId);
+
+  if (exists) {
+    const overwrite = confirm(`A palette with ID "${paletteId}" already exists. Overwrite?`);
+    if (!overwrite) return;
+  }
+
+  // Create JSON file and download
+  const jsonString = JSON.stringify(paletteJSON, null, 2);
+  const blob = new Blob([jsonString], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${paletteId}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+
+  // Update manifest
+  if (!exists) {
+    const result = await updatePaletteManifest('add', {
+      id: paletteId,
+      name: name,
+      file: `${paletteId}.json`
+    });
+
+    if (!result.success) {
+      alert(`Palette saved, but manifest update failed: ${result.error}\nPlease manually add the palette to palettes/index.json`);
+    }
+  }
+
+  alert(`Palette "${name}" saved as ${paletteId}.json\n\nTo use this palette:\n1. Move the downloaded file to the palettes/ folder\n2. Add an entry to palettes/index.json if not already there\n3. Refresh the application`);
+
+  closePaletteEditor();
+
+  console.log(`[PaletteEditor] Palette saved: ${paletteId}`);
+}
+
+// Delete palette
+async function deletePalette() {
+  const currentPaletteId = state.themes.active;
+
+  if (!currentPaletteId) {
+    alert('No palette is currently active.');
+    return;
+  }
+
+  // System palettes that cannot be deleted
+  const SYSTEM_PALETTES = ['sketch'];
+
+  if (SYSTEM_PALETTES.includes(currentPaletteId)) {
+    alert(`Cannot delete system palette: "${currentPaletteId}"`);
+    return;
+  }
+
+  const manifest = await loadPaletteManifest();
+  const palette = manifest.palettes.find(p => p.id === currentPaletteId);
+
+  if (!palette) {
+    alert('Current palette not found in manifest.');
+    return;
+  }
+
+  const confirmed = confirm(`Delete palette "${palette.name}"?\n\nThis will remove it from the palette list. The file must be manually deleted from the palettes/ folder.`);
+
+  if (!confirmed) return;
+
+  // Update manifest
+  const result = await updatePaletteManifest('remove', { id: currentPaletteId });
+
+  if (result.success) {
+    // Switch to default palette
+    await applyPalette('sketch');
+
+    // Update palette selector
+    const paletteSelector = document.getElementById('paletteSelector');
+    paletteSelector.value = 'sketch';
+
+    // Reload palette list in dropdown
+    await populatePaletteSelector();
+
+    alert(`Palette "${palette.name}" removed from list.\n\nNote: The file ${palette.file} must be manually deleted from the palettes/ folder.`);
+
+    console.log(`[PaletteEditor] Palette deleted: ${currentPaletteId}`);
+  } else {
+    alert(`Failed to delete palette: ${result.error}`);
+  }
+}
+
+// Populate palette selector dropdown
+async function populatePaletteSelector() {
+  const manifest = await loadPaletteManifest();
+  const paletteSelector = document.getElementById('paletteSelector');
+  const currentSelection = paletteSelector.value;
+
+  paletteSelector.innerHTML = '';
+
+  manifest.palettes.forEach(palette => {
+    const option = document.createElement('option');
+    option.value = palette.id;
+    option.textContent = palette.name;
+    paletteSelector.appendChild(option);
+  });
+
+  // Restore previous selection if still exists
+  if (Array.from(paletteSelector.options).some(opt => opt.value === currentSelection)) {
+    paletteSelector.value = currentSelection;
+  }
+}
+
 // DOM Elements
 const canvas = document.getElementById('canvas');
 const elementsList = document.getElementById('elementsList');
@@ -282,6 +702,25 @@ const accordionItemsList = document.getElementById('accordionItemsList');
 const addAccordionItemBtn = document.getElementById('addAccordionItemBtn');
 const saveAccordionBtn = document.getElementById('saveAccordionBtn');
 const closeAccordionEditorBtn = document.getElementById('closeAccordionEditorBtn');
+
+// @agent:PaletteEditor:authority
+// Palette editor elements
+const paletteEditorPanel = document.getElementById('paletteEditorPanel');
+const editPaletteBtn = document.getElementById('editPaletteBtn');
+const deletePaletteBtn = document.getElementById('deletePaletteBtn');
+const applyPalettePreviewBtn = document.getElementById('applyPalettePreviewBtn');
+const undoPalettePreviewBtn = document.getElementById('undoPalettePreviewBtn');
+const savePaletteBtn = document.getElementById('savePaletteBtn');
+const cancelPaletteEditorBtn = document.getElementById('cancelPaletteEditorBtn');
+const editorPaletteName = document.getElementById('editorPaletteName');
+const newPaletteName = document.getElementById('newPaletteName');
+const paletteNotes = document.getElementById('paletteNotes');
+
+// Palette editor state
+const paletteEditorState = {
+  originalPaletteId: null,
+  isEditorOpen: false
+};
 
 // Toolbar buttons
 const newBtn = document.getElementById('newBtn');
@@ -339,6 +778,55 @@ closeMenuEditorBtn.addEventListener('click', closeMenuEditor);
 addAccordionItemBtn.addEventListener('click', addAccordionItem);
 saveAccordionBtn.addEventListener('click', saveAccordion);
 closeAccordionEditorBtn.addEventListener('click', closeAccordionEditor);
+
+// @agent:PaletteEditor:extension
+// Palette editor event listeners
+editPaletteBtn.addEventListener('click', openPaletteEditor);
+deletePaletteBtn.addEventListener('click', deletePalette);
+applyPalettePreviewBtn.addEventListener('click', applyPalettePreview);
+undoPalettePreviewBtn.addEventListener('click', undoPalettePreview);
+savePaletteBtn.addEventListener('click', savePaletteAs);
+cancelPaletteEditorBtn.addEventListener('click', async () => {
+  // Revert to original palette if changes were applied
+  if (paletteEditorState.originalPaletteId) {
+    await applyPalette(paletteEditorState.originalPaletteId);
+  }
+  closePaletteEditor();
+});
+
+// Make palette editor panel draggable
+let isDraggingPaletteEditor = false;
+let paletteEditorDragOffset = { x: 0, y: 0 };
+
+paletteEditorPanel.addEventListener('mousedown', (e) => {
+  // Only start drag if clicking on header or panel background (not on inputs/buttons)
+  if (e.target === paletteEditorPanel || e.target.closest('.palette-editor-header')) {
+    isDraggingPaletteEditor = true;
+    const rect = paletteEditorPanel.getBoundingClientRect();
+    paletteEditorDragOffset.x = e.clientX - rect.left;
+    paletteEditorDragOffset.y = e.clientY - rect.top;
+    paletteEditorPanel.style.cursor = 'grabbing';
+  }
+});
+
+document.addEventListener('mousemove', (e) => {
+  if (isDraggingPaletteEditor) {
+    const newLeft = e.clientX - paletteEditorDragOffset.x;
+    const newTop = e.clientY - paletteEditorDragOffset.y;
+
+    paletteEditorPanel.style.left = `${newLeft}px`;
+    paletteEditorPanel.style.top = `${newTop}px`;
+    paletteEditorPanel.style.right = 'auto';
+    paletteEditorPanel.style.transform = 'none';
+  }
+});
+
+document.addEventListener('mouseup', () => {
+  if (isDraggingPaletteEditor) {
+    isDraggingPaletteEditor = false;
+    paletteEditorPanel.style.cursor = 'move';
+  }
+});
 
 // Create Group button
 document.getElementById('createGroupBtn').addEventListener('click', () => {
