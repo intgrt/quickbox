@@ -1,0 +1,34 @@
+{
+  "name": "Golden Hour",
+  "notes": "Warm earth tones and golden hues",
+  "canvas": "#faffef",
+  "header": "#cc8865",
+  "footer": "#cc8865",
+  "elements": {
+    "text": {
+      "fill": "#ffffff",
+      "border": "#4a403a",
+      "textColor": "#4a403a"
+    },
+    "image": {
+      "fill": "#cc8865",
+      "border": "#8e7b70",
+      "textColor": "#4a403a"
+    },
+    "menu": {
+      "fill": "#faffef",
+      "border": "#8e7b70",
+      "textColor": "#4a403a"
+    },
+    "button": {
+      "fill": "#dbb070",
+      "border": "#4a403a",
+      "textColor": "#ffffff"
+    },
+    "accordion": {
+      "fill": "#faffef",
+      "border": "#db8965",
+      "textColor": "#4a403a"
+    }
+  }
+}

@@ -1,5 +1,5 @@
 # QuickBox System Design & Architecture
-**Version:** 1.0
+**Version:** 1.1
 **Last Updated:** 2026-01-06
 **Purpose:** Comprehensive system design document for implementing features and understanding codebase structure
 
@@ -32,6 +32,8 @@
 - JSON-based file format with version compatibility
 - Two operational modes: Design (editing) and Navigate (preview)
 - Multi-page support with header/footer regions shared across all pages
+- Palette system for global color theming via CSS custom properties
+- Global font control independent of color palettes
 
 ---
 
@@ -113,6 +115,12 @@ const state = {
 
   // Mode
   currentMode: 'design',      // 'design' or 'navigate'
+
+  // Theming (v1.1)
+  themes: {
+    active: 'sketch',         // Currently active palette ID
+    palettes: {}              // Reserved for future use
+  },
 
   // Counters (auto-increment)
   boxCounter: 0,
@@ -442,6 +450,107 @@ Undo History Recorded
 - Page links switch to target page
 - Anchor links highlight target element
 
+### 7. Palette System (v1.1)
+
+**Overview:**
+- Global color theming system using CSS custom properties
+- Palettes stored as JSON files in `/palettes/` folder
+- Independent from font settings
+- LLM-friendly: easy to create new palettes programmatically
+
+**Palette Structure:**
+
+Each palette is a JSON file (e.g., `sketch.json`):
+```json
+{
+  "name": "Sketch",
+  "notes": "Default QuickBox hand-drawn wireframe style",
+  "canvas": "#f5f5f5",
+  "header": "#ffffff",
+  "footer": "#ffffff",
+  "elements": {
+    "text": {
+      "fill": "#ffffff",
+      "border": "#333333",
+      "textColor": "#000000"
+    },
+    "image": { "fill": "#fff", "border": "#333", "textColor": "#666" },
+    "menu": { "fill": "#fff", "border": "#333", "textColor": "#000" },
+    "button": { "fill": "#fff", "border": "#333", "textColor": "#000" },
+    "accordion": { "fill": "#fff", "border": "#333", "textColor": "#000" }
+  }
+}
+```
+
+**Palette Manifest:**
+
+`/palettes/index.json` lists all available palettes:
+```json
+{
+  "palettes": [
+    { "id": "sketch", "name": "Sketch", "file": "sketch.json" },
+    { "id": "botanical-sanctuary", "name": "Botanical Sanctuary", "file": "botanical-sanctuary.json" }
+  ]
+}
+```
+
+**CSS Integration:**
+
+Colors applied via CSS custom properties:
+```css
+.box-text {
+  background: var(--text-fill, #fff);
+  border-color: var(--text-border, #333);
+  color: var(--text-color, #000);
+}
+```
+
+**Application Flow:**
+1. On app startup: Load `palettes/index.json` manifest
+2. Populate palette selector dropdown
+3. Apply default palette (`sketch`)
+4. When user selects palette: `applyPalette(id)` loads JSON, sets CSS variables
+5. All elements instantly update colors
+
+**Key Functions:**
+- `loadPaletteManifest()` - Loads palette list from manifest
+- `applyPalette(paletteId)` - Loads palette JSON, sets CSS variables globally
+- `handlePaletteChange(event)` - Event handler for palette dropdown
+
+**LLM Workflow:**
+1. LLM analyzes website/design
+2. Creates new palette JSON file in `/palettes/` folder
+3. Updates `palettes/index.json` manifest
+4. User refreshes palette list or restarts app
+5. New palette appears in dropdown
+
+### 8. Global Font Control (v1.1)
+
+**Overview:**
+- Font selection applies globally to all elements
+- Independent from palette system
+- Uses CSS custom property `--global-font`
+
+**Implementation:**
+
+CSS variable in `.box-content`:
+```css
+.box-content {
+  font-family: var(--global-font, 'Architects Daughter', cursive);
+}
+```
+
+**Font Change Flow:**
+1. User selects font from dropdown
+2. `updateFont()` sets `--global-font` CSS variable
+3. All text boxes, buttons, menus, accordions instantly update
+4. No selection required - affects all elements globally
+
+**Key Function:**
+- `updateFont()` - Sets global `--global-font` CSS variable
+
+**Note:** Font size (`fontSize`) remains per-box property, only font family is global.
+
 ---
 
 ## Rendering Pipeline
@@ -514,7 +623,7 @@ These modify canvas dimensions via drag, not box dimensions.
 
 ```json
 {
-  "version": "1.0",
+  "version": "1.1",
   "header": {
     "boxes": [
       {
@@ -548,19 +657,26 @@ These modify canvas dimensions via drag, not box dimensions.
       "boxes": [...]
     }
   ],
-  "currentPageId": "page-1"
+  "currentPageId": "page-1",
+  "themes": {
+    "active": "sketch",
+    "palettes": {}
+  }
 }
 ```
 
 ### Backward Compatibility
 
-- **v1.0 files:** Image boxes now store relative paths (`"media/logo.png"`) instead of base64 data
+- **v1.1 files:** Adds `themes` object to state for palette tracking
+- **v1.0 files:** Fully compatible - `themes` object added on load with default value
 - **v0.12.x files with base64 images:** Will load but images stored as base64 strings may not render correctly
 - **v0.7+ files (non-image boxes):** Fully compatible
 - **v0.6 and earlier:** Not compatible (due to header/footer structure changes)
 - **Version checks:** File version compared on load to warn about incompatibility
 
-**Breaking Change in v1.0:** Image storage changed from base64 to relative file paths. Old mockup files with embedded base64 images will need images re-linked from `/media` folder.
+**Breaking Changes:**
+- **v1.0:** Image storage changed from base64 to relative file paths
+- **v1.1:** Font family now controlled globally via CSS variable, `box.fontFamily` property ignored during rendering (but preserved in data for backward compatibility)
 
 ### Save/Load Process
 

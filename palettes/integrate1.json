@@ -1,0 +1,34 @@
+{
+  "name": "Integrate1",
+  "notes": "Teal-based professional palette inspired by Integrate Counselling",
+  "canvas": "#f8f8f8",
+  "header": "#6ba5a8",
+  "footer": "#6ba5a8",
+  "elements": {
+    "text": {
+      "fill": "#ffffff",
+      "border": "#3d6b6d",
+      "textColor": "#333333"
+    },
+    "image": {
+      "fill": "#e8f3f4",
+      "border": "#6ba5a8",
+      "textColor": "#3d6b6d"
+    },
+    "menu": {
+      "fill": "#ffffff",
+      "border": "#6ba5a8",
+      "textColor": "#333333"
+    },
+    "button": {
+      "fill": "#3d6b6d",
+      "border": "#3d6b6d",
+      "textColor": "#ffffff"
+    },
+    "accordion": {
+      "fill": "#6ba5a8",
+      "border": "#3d6b6d",
+      "textColor": "#ffffff"
+    }
+  }
+}

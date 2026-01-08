@@ -1,3 +1,8 @@
 {
-  "_comment": "NOTE: This file is not currently used. All Claude Code settings for this project are configured in .claude/settings.json. This file exists as a template for future use if multiple developers join the team. settings.local.json would be used for: personal machine-specific overrides, local API keys and credentials, individual developer preferences, and machine-specific configurations. It is automatically gitignored and not shared with team members."
+  "_comment": "NOTE: This file is not currently used. All Claude Code settings for this project are configured in .claude/settings.json. This file exists as a template for future use if multiple developers join the team. settings.local.json would be used for: personal machine-specific overrides, local API keys and credentials, individual developer preferences, and machine-specific configurations. It is automatically gitignored and not shared with team members.",
+  "permissions": {
+    "allow": [
+      "Bash(mkdir:*)"
+    ]
+  }
 }

@@ -69,6 +69,15 @@
       </div>
 
       <div class="toolbar-section">
+        <label for="paletteSelector">Palette:</label>
+        <select id="paletteSelector">
+          <option value="sketch">Sketch</option>
+        </select>
+        <button id="editPaletteBtn" title="Edit Current Palette">✏️ Edit</button>
+        <button id="deletePaletteBtn" title="Delete Current Palette">🗑️ Delete</button>
+      </div>
+
+      <div class="toolbar-section">
         <label>Mode:</label>
         <button id="designModeBtn" class="mode-btn active" title="Design Mode">✏️</button>
         <button id="navigateModeBtn" class="mode-btn" title="Navigate Mode">🧭</button>
@@ -140,6 +149,155 @@
         <button id="addAccordionItemBtn">+ Add Item</button>
         <button id="saveAccordionBtn">Save</button>
       </div>
+    </div>
+  </div>
+
+  <!-- @agent:PaletteEditor:authority -->
+  <!-- Palette Editor Panel -->
+  <div id="paletteEditorPanel" class="palette-editor-panel hidden">
+    <div class="palette-editor-header">
+      <h3>Edit Palette: <span id="editorPaletteName"></span></h3>
+    </div>
+
+    <div class="palette-editor-content">
+      <!-- Palette Name Input -->
+      <div class="editor-row">
+        <label>New Palette Name:</label>
+        <input type="text" id="newPaletteName" class="palette-name-input" required placeholder="Enter new palette name">
+      </div>
+
+      <!-- Notes Textarea -->
+      <div class="editor-row">
+        <label>Notes (optional):</label>
+        <textarea id="paletteNotes" rows="2" class="palette-notes-input" placeholder="Add notes about this palette"></textarea>
+      </div>
+
+      <!-- Canvas/Header/Footer Backgrounds -->
+      <div class="editor-section">
+        <h4>Backgrounds</h4>
+        <div class="editor-row">
+          <label>Canvas:</label>
+          <input type="color" class="palette-editor-color-picker" data-target="canvasBg">
+          <input type="text" id="canvasBg" class="palette-editor-color-input" placeholder="#f5f5f5">
+        </div>
+        <div class="editor-row">
+          <label>Header:</label>
+          <input type="color" class="palette-editor-color-picker" data-target="headerBg">
+          <input type="text" id="headerBg" class="palette-editor-color-input" placeholder="#ffffff">
+        </div>
+        <div class="editor-row">
+          <label>Footer:</label>
+          <input type="color" class="palette-editor-color-picker" data-target="footerBg">
+          <input type="text" id="footerBg" class="palette-editor-color-input" placeholder="#ffffff">
+        </div>
+      </div>
+
+      <!-- Text Box Colors -->
+      <div class="editor-section">
+        <h4>Text Box</h4>
+        <div class="editor-row">
+          <label>Fill:</label>
+          <input type="color" class="palette-editor-color-picker" data-target="textFill">
+          <input type="text" id="textFill" class="palette-editor-color-input" placeholder="#ffffff">
+        </div>
+        <div class="editor-row">
+          <label>Border:</label>
+          <input type="color" class="palette-editor-color-picker" data-target="textBorder">
+          <input type="text" id="textBorder" class="palette-editor-color-input" placeholder="#333333">
+        </div>
+        <div class="editor-row">
+          <label>Text Color:</label>
+          <input type="color" class="palette-editor-color-picker" data-target="textColor">
+          <input type="text" id="textColor" class="palette-editor-color-input" placeholder="#000000">
+        </div>
+      </div>
+
+      <!-- Image Box Colors -->
+      <div class="editor-section">
+        <h4>Image Box</h4>
+        <div class="editor-row">
+          <label>Fill:</label>
+          <input type="color" class="palette-editor-color-picker" data-target="imageFill">
+          <input type="text" id="imageFill" class="palette-editor-color-input" placeholder="#ffffff">
+        </div>
+        <div class="editor-row">
+          <label>Border:</label>
+          <input type="color" class="palette-editor-color-picker" data-target="imageBorder">
+          <input type="text" id="imageBorder" class="palette-editor-color-input" placeholder="#333333">
+        </div>
+        <div class="editor-row">
+          <label>Text Color:</label>
+          <input type="color" class="palette-editor-color-picker" data-target="imageColor">
+          <input type="text" id="imageColor" class="palette-editor-color-input" placeholder="#666666">
+        </div>
+      </div>
+
+      <!-- Menu Box Colors -->
+      <div class="editor-section">
+        <h4>Menu Box</h4>
+        <div class="editor-row">
+          <label>Fill:</label>
+          <input type="color" class="palette-editor-color-picker" data-target="menuFill">
+          <input type="text" id="menuFill" class="palette-editor-color-input" placeholder="#ffffff">
+        </div>
+        <div class="editor-row">
+          <label>Border:</label>
+          <input type="color" class="palette-editor-color-picker" data-target="menuBorder">
+          <input type="text" id="menuBorder" class="palette-editor-color-input" placeholder="#333333">
+        </div>
+        <div class="editor-row">
+          <label>Text Color:</label>
+          <input type="color" class="palette-editor-color-picker" data-target="menuColor">
+          <input type="text" id="menuColor" class="palette-editor-color-input" placeholder="#000000">
+        </div>
+      </div>
+
+      <!-- Button Box Colors -->
+      <div class="editor-section">
+        <h4>Button Box</h4>
+        <div class="editor-row">
+          <label>Fill:</label>
+          <input type="color" class="palette-editor-color-picker" data-target="buttonFill">
+          <input type="text" id="buttonFill" class="palette-editor-color-input" placeholder="#ffffff">
+        </div>
+        <div class="editor-row">
+          <label>Border:</label>
+          <input type="color" class="palette-editor-color-picker" data-target="buttonBorder">
+          <input type="text" id="buttonBorder" class="palette-editor-color-input" placeholder="#333333">
+        </div>
+        <div class="editor-row">
+          <label>Text Color:</label>
+          <input type="color" class="palette-editor-color-picker" data-target="buttonColor">
+          <input type="text" id="buttonColor" class="palette-editor-color-input" placeholder="#000000">
+        </div>
+      </div>
+
+      <!-- Accordion Box Colors -->
+      <div class="editor-section">
+        <h4>Accordion Box</h4>
+        <div class="editor-row">
+          <label>Fill:</label>
+          <input type="color" class="palette-editor-color-picker" data-target="accordionFill">
+          <input type="text" id="accordionFill" class="palette-editor-color-input" placeholder="#ffffff">
+        </div>
+        <div class="editor-row">
+          <label>Border:</label>
+          <input type="color" class="palette-editor-color-picker" data-target="accordionBorder">
+          <input type="text" id="accordionBorder" class="palette-editor-color-input" placeholder="#333333">
+        </div>
+        <div class="editor-row">
+          <label>Text Color:</label>
+          <input type="color" class="palette-editor-color-picker" data-target="accordionColor">
+          <input type="text" id="accordionColor" class="palette-editor-color-input" placeholder="#000000">
+        </div>
+      </div>
+    </div>
+
+    <div class="palette-editor-actions">
+      <button id="applyPalettePreviewBtn" class="btn-action">Apply</button>
+      <button id="undoPalettePreviewBtn" class="btn-action">Undo</button>
+      <button id="savePaletteBtn" class="btn-primary">Save As New Palette</button>
+      <button id="cancelPaletteEditorBtn" class="btn-secondary">Cancel</button>
     </div>
   </div>
 
