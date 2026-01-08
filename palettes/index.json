@@ -14,6 +14,11 @@
       "id": "golden-hour",
       "name": "Golden Hour",
       "file": "golden-hour.json"
+    },
+    {
+      "id": "integrate1",
+      "name": "Integrate1",
+      "file": "integrate1.json"
     }
   ]
 }
