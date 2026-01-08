@@ -1,5 +1,5 @@
 {
-  "model": "default",
+  "model": "claude-sonnet-4-5-20250929",
   "permissions": {
     "deny": [
       "Read(.env*)",
@@ -12,5 +12,17 @@
   "env": {
     "NODE_ENV": "development",
     "DEBUG": "true"
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo === QuickBox Project Documentation === && echo. && type SYSTEM_DESIGN.md && echo. && echo === END SYSTEM_DESIGN.md === && echo. && type README.md && echo. && echo === END README.md === && echo. && type \"..\\Agent Navigation Marker ANM v0.4.md\" && echo. && echo === END ANM v0.4 === && echo. && echo. && echo ============================================ && echo AGENT VERIFICATION REQUIRED && echo ============================================ && echo. && echo ANSWER these questions in your FIRST response: && echo. && echo Q1: What is the minimum resizable height for header/footer regions in QuickBox, and which array property stores main region boxes? && echo. && echo Q2: What breaking change occurred in v1.0 regarding image storage, and does QuickBox use external dependencies? && echo. && echo Q3: Under the ANM v0.4 Do-Not-Edit-Unmarked-Code Rule, list the TWO conditions that permit code modification. && echo. && echo ============================================"
+          }
+        ]
+      }
+    ]
   }
 }
