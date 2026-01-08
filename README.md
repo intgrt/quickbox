@@ -1,6 +1,6 @@
 # QuickBox
 
-**Version:** 1.0
+**Version:** 1.2
 **License:** Apache License 2.0
 **Copyright:** 2025 Intelliscape Interactive Corp.
 
@@ -25,6 +25,10 @@ A lightweight, browser-based wireframe mockup tool for rapid web page prototypin
 - **Design & Navigate modes** for editing and previewing
 - **Undo/Redo** (Ctrl+Z / Ctrl+Y)
 - **Page linking** and anchor navigation
+- **Color theming** via palette system with edit/save/delete capabilities
+- **Per-element style overrides** for custom colors on individual boxes
+- **Header/footer background color overrides** independent of boxes
+- **Global font control** across all elements
 - **Hand-drawn aesthetic** using Architects Daughter font
 - **JSON file format** with backward compatibility (v0.7+)
 
@@ -41,6 +45,7 @@ A lightweight, browser-based wireframe mockup tool for rapid web page prototypin
 - `app.js` - Core application logic
 - `styles.css` - Styling and layout
 - `SYSTEM_DESIGN.md` - Complete architecture and implementation guide
+- `palettes/` - Color palette definitions (JSON)
 - `media/` - Images (logo, etc.)
 
 ## Documentation

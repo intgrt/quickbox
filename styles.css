@@ -1247,3 +1247,302 @@ label {
   box-shadow: 1px 1px 0 #333;
   transform: translate(1px, 1px);
 }
+
+/* @agent:StyleOverrides:authority */
+/* Style Override Panel */
+.editor-panel {
+  position: fixed;
+  top: 80px;
+  right: 20px;
+  background: #fff;
+  border: 3px solid #333;
+  box-shadow: 5px 5px 0 #333;
+  padding: 15px;
+  width: 480px;
+  max-height: calc(100vh - 120px);
+  overflow-y: auto;
+  z-index: 10000;
+  font-family: 'Architects Daughter', cursive;
+}
+
+.editor-panel.hidden {
+  display: none !important;
+}
+
+.style-override-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid #333;
+}
+
+.style-override-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: bold;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 0;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #333;
+}
+
+.close-btn:hover {
+  color: #d32f2f;
+}
+
+.style-override-content {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.palette-reference-section {
+  padding: 10px;
+  background: #f9f9f9;
+  border: 2px solid #ddd;
+  border-radius: 4px;
+}
+
+.palette-reference-section label {
+  display: block;
+  font-weight: bold;
+  margin-bottom: 10px;
+  font-size: 13px;
+}
+
+.color-reference-row {
+  display: flex;
+  gap: 15px;
+  justify-content: space-around;
+}
+
+.color-swatch-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+}
+
+.color-swatch {
+  width: 50px;
+  height: 50px;
+  border: 2px solid #333;
+  border-radius: 4px;
+  box-shadow: 2px 2px 0 #333;
+}
+
+.color-swatch-container span {
+  font-size: 11px;
+  font-weight: bold;
+}
+
+.section-divider {
+  border: none;
+  border-top: 2px dashed #ccc;
+  margin: 10px 0;
+}
+
+.override-colors-section label {
+  display: block;
+  font-weight: bold;
+  margin-bottom: 10px;
+  font-size: 13px;
+}
+
+.override-color-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.color-label {
+  min-width: 90px;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.color-picker {
+  width: 40px;
+  height: 35px;
+  border: 2px solid #333;
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 4px;
+}
+
+.color-preview {
+  width: 100px;
+  height: 35px;
+  border: 2px solid #333;
+  border-radius: 4px;
+  box-shadow: 2px 2px 0 #333;
+}
+
+.hex-input {
+  flex: 1;
+  padding: 8px;
+  border: 2px solid #333;
+  font-family: 'Architects Daughter', cursive;
+  font-size: 12px;
+  text-transform: uppercase;
+  border-radius: 4px;
+}
+
+.hex-input:focus {
+  outline: none;
+  border-color: #4caf50;
+}
+
+.reset-btn {
+  padding: 8px 12px;
+  background: #ff9800;
+  color: #fff;
+  border: 2px solid #333;
+  cursor: pointer;
+  font-family: 'Architects Daughter', cursive;
+  font-size: 12px;
+  font-weight: bold;
+  box-shadow: 2px 2px 0 #333;
+  border-radius: 4px;
+  width: 100%;
+  margin-top: 5px;
+}
+
+.reset-btn:hover {
+  background: #f57c00;
+}
+
+.reset-btn:active {
+  box-shadow: 1px 1px 0 #333;
+  transform: translate(1px, 1px);
+}
+
+.applying-to-info {
+  padding: 8px;
+  background: #e3f2fd;
+  border: 2px solid #2196f3;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: bold;
+  text-align: center;
+  color: #1976d2;
+}
+
+.style-override-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  padding-top: 15px;
+  border-top: 2px solid #ddd;
+  margin-top: 10px;
+}
+
+/* Visual indicator for boxes with active overrides */
+.box.has-style-override::after {
+  content: '🎨';
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  font-size: 16px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid #333;
+  border-radius: 3px;
+  padding: 2px 4px;
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* @agent:StyleOverrides:authority */
+/* Region Color Override Panel */
+.region-color-panel {
+  position: fixed;
+  top: 100px;
+  right: 20px;
+  width: 320px;
+  background: #fff;
+  border: 3px solid #333;
+  border-radius: 8px;
+  box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.1);
+  z-index: 10000;
+  font-family: var(--global-font, 'Architects Daughter', cursive);
+}
+
+.region-color-panel.hidden {
+  display: none;
+}
+
+.region-color-header {
+  padding: 12px 16px;
+  border-bottom: 2px solid #333;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #f8f8f8;
+}
+
+.region-color-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: bold;
+}
+
+.region-color-content {
+  padding: 16px;
+}
+
+.palette-info {
+  margin-bottom: 16px;
+  padding: 12px;
+  background: #f5f5f5;
+  border: 2px solid #ddd;
+  border-radius: 4px;
+}
+
+.palette-info label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: bold;
+  font-size: 13px;
+}
+
+.palette-color-swatch {
+  width: 100%;
+  height: 40px;
+  border: 2px solid #333;
+  border-radius: 4px;
+}
+
+.color-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.color-picker-row label {
+  font-weight: bold;
+  font-size: 13px;
+  min-width: 100px;
+}
+
+.region-color-actions {
+  padding: 12px 16px;
+  border-top: 2px solid #333;
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  background: #f8f8f8;
+}

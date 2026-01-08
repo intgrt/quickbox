@@ -1,6 +1,6 @@
 # QuickBox System Design & Architecture
-**Version:** 1.1
-**Last Updated:** 2026-01-06
+**Version:** 1.2
+**Last Updated:** 2026-01-08
 **Purpose:** Comprehensive system design document for implementing features and understanding codebase structure
 
 ---
@@ -551,6 +551,169 @@ CSS variable in `.box-content`:
 
 **Note:** Font size (`fontSize`) remains per-box property, only font family is global.
 
+### 9. Palette Editor (v1.1)
+
+**Overview:**
+- Users can edit existing palettes, create new palettes, and delete custom palettes
+- Provides visual color pickers for all element types and backgrounds
+- Live preview with Apply/Undo functionality
+- Save As creates new palette files in `/palettes/` folder
+
+**UI Location:**
+- Toolbar: Palette dropdown, ✏️ Edit button, 🗑️ Delete button
+- Panel: Opens on right side when editing palette
+
+**Workflow:**
+1. User selects palette from dropdown
+2. Clicks ✏️ Edit button → Palette Editor Panel opens
+3. Adjusts colors using color pickers with live preview
+4. Click "Apply" → Changes visible immediately (temporary)
+5. Click "Undo" → Reverts to original palette
+6. Click "Save As New Palette" → Prompts for name, creates new JSON file
+7. Click "Cancel" → Reverts and closes panel
+
+**Data Flow:**
+- Editor reads current palette from CSS variables
+- Apply button updates CSS variables temporarily (no file write)
+- Save As button:
+  - Prompts for palette name
+  - Creates new JSON file in `/palettes/` folder
+  - Updates `palettes/index.json` manifest
+  - Applies new palette as active
+
+**Delete Palette:**
+- Available for custom palettes only (not built-in "Sketch")
+- Deletes palette JSON file
+- Removes entry from `palettes/index.json` manifest
+- Reverts to "Sketch" palette if deleted palette was active
+
+**Key Functions:**
+- `editCurrentPalette()` - Opens editor with current palette colors
+- `applyPalettePreview()` - Updates CSS variables for live preview
+- `undoPalettePreview()` - Reverts to original palette
+- `savePaletteAs()` - Creates new palette file and updates manifest
+- `deleteCurrentPalette()` - Removes custom palette
+
+**File Locations:**
+- HTML: index.html lines 156-302 (Palette Editor Panel)
+- CSS: styles.css (palette editor styles)
+- JavaScript: app.js (palette editor functions)
+
+### 10. Per-Element Style Overrides (v1.2)
+
+**Overview:**
+- Allows individual boxes (text, image, button) to override global palette colors
+- Each box can have custom fill, border, and text colors
+- Visual indicator (🎨 emoji) shows which boxes have overrides
+- Works with both single boxes and groups
+
+**Data Model:**
+```javascript
+box.styleOverrides = {
+  fill: "#ff5733",      // Optional: override fill color
+  border: "#000000",    // Optional: override border color
+  textColor: "#ffffff"  // Optional: override text color
+};
+```
+
+**User Workflow:**
+1. Right-click on text/image/button box → Context menu appears
+2. Click "Style Override..." → Style Override Panel opens
+3. Panel shows:
+   - Current palette colors as reference swatches
+   - Three color pickers (fill, border, text) with live preview
+   - Hex input fields synced with color pickers
+4. Adjust colors → Changes visible immediately (live preview)
+5. Click "Apply" → Commits to undo history and closes panel
+6. Click "Cancel" → Reverts to original colors and closes panel
+7. Click "Reset to Palette" → Removes overrides, uses palette defaults
+
+**Group Override Behavior:**
+- If multiple boxes selected (group), panel shows first box's colors
+- Changes apply to ALL boxes in group simultaneously
+- "Applying to X boxes" message shows count
+
+**Rendering:**
+- Overrides applied as inline styles: `boxEl.style.backgroundColor = box.styleOverrides.fill`
+- Inline styles take precedence over CSS variables from palette
+- Visual indicator: `box.has-style-override::after { content: '🎨'; }`
+
+**Persistence:**
+- `styleOverrides` property saved in box object (optional, backward compatible)
+- File format v1.2 supports this feature
+- Older files without overrides load normally (property undefined/null)
+
+**Key Functions:**
+- `openStyleOverridePanel(box)` - Opens panel, populates with box colors
+- `applyTemporaryStyleOverride(property, value)` - Live preview without undo
+- `applyStyleOverride()` - Commits changes to undo history
+- `cancelStyleOverride()` - Reverts to original state
+- `resetToDefaultPalette()` - Removes all overrides
+
+**File Locations:**
+- HTML: index.html lines 304-369 (Style Override Panel)
+- CSS: styles.css lines 1251-1466 (panel styles, 🎨 indicator)
+- JavaScript: app.js lines 2349-2616 (override panel management)
+- Rendering: app.js lines 1306-1341, 1357-1361 (apply overrides to box elements)
+
+### 11. Header/Footer Region Background Color Overrides (v1.2)
+
+**Overview:**
+- Header and footer regions can have background colors independent of palette
+- Separate from boxes inside regions (boxes use their own palette/override colors)
+- Simple dedicated panel with single color picker
+- Live preview with Apply/Cancel/Reset
+
+**Data Model:**
+```javascript
+state.header.colorOverride = "#f0f0f0";  // Optional: override header background
+state.footer.colorOverride = "#e0e0e0";  // Optional: override footer background
+```
+
+**User Workflow:**
+1. Right-click on empty header/footer space (not on a box) → Context menu appears
+2. Click "Override Background Color..." → Region Color Panel opens
+3. Panel shows:
+   - Current palette background color as reference swatch
+   - Single color picker with hex input
+   - Live preview as user adjusts color
+4. Click "Apply" → Commits to undo history and closes panel
+5. Click "Cancel" → Reverts to original color and closes panel
+6. Click "Reset to Palette" → Removes override, uses palette default
+
+**Context Menu Detection:**
+- Right-click on box inside region → Shows box context menu (existing behavior)
+- Right-click on empty region space → Shows region context menu (new behavior)
+- Detection logic: `if (!e.target.closest('.box'))` → region click
+
+**Rendering:**
+- Override applied as inline style on region element:
+  ```javascript
+  if (state.header.colorOverride) {
+    headerRegion.style.backgroundColor = state.header.colorOverride;
+  }
+  ```
+- Inline style takes precedence over CSS `--header-bg` variable
+
+**Persistence:**
+- `colorOverride` property saved in `state.header` and `state.footer` objects
+- File format v1.2 supports this feature
+- Backward compatible: older files load with `colorOverride: null` (uses palette)
+
+**Key Functions:**
+- `showRegionContextMenu(e, regionType)` - Shows context menu for region background
+- `openRegionColorOverridePanel(regionType)` - Opens dedicated region color panel
+- `applyRegionColorOverride()` - Commits to undo history
+- `cancelRegionColorOverride()` - Reverts to original color
+- `resetRegionToDefaultPalette()` - Removes override
+
+**File Locations:**
+- HTML: index.html lines 371-397 (Region Color Panel)
+- CSS: styles.css lines 1468-1548 (region panel styles)
+- JavaScript: app.js lines 2618-2723 (region color override functions)
+- Context Menu: app.js lines 1036-1069, 3901-3947 (region detection and menu)
+- Rendering: app.js lines 3597-3600, 3614-3617 (apply background color)
+
 ---
 
 ## Rendering Pipeline
@@ -623,7 +786,7 @@ These modify canvas dimensions via drag, not box dimensions.
 
 ```json
 {
-  "version": "1.1",
+  "version": "1.2",
   "header": {
     "boxes": [
       {
@@ -638,14 +801,21 @@ These modify canvas dimensions via drag, not box dimensions.
         "text": "Logo",
         "fontSize": 20,
         "fontFamily": "'Architects Daughter', cursive",
-        "link": null
+        "link": null,
+        "styleOverrides": {
+          "fill": "#ff5733",
+          "border": "#000000",
+          "textColor": "#ffffff"
+        }
       }
     ],
-    "height": 80
+    "height": 80,
+    "colorOverride": "#f0f0f0"
   },
   "footer": {
     "boxes": [...],
-    "height": 80
+    "height": 80,
+    "colorOverride": "#e0e0e0"
   },
   "pages": [
     {
@@ -667,7 +837,8 @@ These modify canvas dimensions via drag, not box dimensions.
 
 ### Backward Compatibility
 
-- **v1.1 files:** Adds `themes` object to state for palette tracking
+- **v1.2 files:** Adds `styleOverrides` (optional box property) and `colorOverride` (optional header/footer property)
+- **v1.1 files:** Fully compatible - missing properties default to null/undefined
 - **v1.0 files:** Fully compatible - `themes` object added on load with default value
 - **v0.12.x files with base64 images:** Will load but images stored as base64 strings may not render correctly
 - **v0.7+ files (non-image boxes):** Fully compatible
@@ -677,6 +848,7 @@ These modify canvas dimensions via drag, not box dimensions.
 **Breaking Changes:**
 - **v1.0:** Image storage changed from base64 to relative file paths
 - **v1.1:** Font family now controlled globally via CSS variable, `box.fontFamily` property ignored during rendering (but preserved in data for backward compatibility)
+- **v1.2:** No breaking changes - all new properties are optional and backward compatible
 
 ### Save/Load Process
 

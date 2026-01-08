@@ -1,6 +1,6 @@
 // QuickBox - Wireframe Mockup Tool
 // Version
-const APP_VERSION = "1.1";
+const APP_VERSION = "1.2";
 
 // @agent:AppConfig:authority
 // Configurable Constants
@@ -22,8 +22,8 @@ const CANVAS_PRESET_SIZES = {
 // @agent:StateManagement:authority
 // State management
 const state = {
-  header: { boxes: [], height: 80 },
-  footer: { boxes: [], height: 80 },
+  header: { boxes: [], height: 80, colorOverride: null },
+  footer: { boxes: [], height: 80, colorOverride: null },
   pages: [],
   currentPageId: null,
   selectedBox: null,
@@ -785,6 +785,32 @@ editPaletteBtn.addEventListener('click', openPaletteEditor);
 deletePaletteBtn.addEventListener('click', deletePalette);
 applyPalettePreviewBtn.addEventListener('click', applyPalettePreview);
 undoPalettePreviewBtn.addEventListener('click', undoPalettePreview);
+
+// @agent:StyleOverrides:extension
+// Style Override panel elements and event listeners
+const styleOverridePanel = document.getElementById('styleOverridePanel');
+const closeStyleOverrideBtn = document.getElementById('closeStyleOverrideBtn');
+const cancelStyleOverrideBtn = document.getElementById('cancelStyleOverrideBtn');
+const applyStyleOverrideBtn = document.getElementById('applyStyleOverrideBtn');
+const resetToPaletteBtn = document.getElementById('resetToPaletteBtn');
+
+closeStyleOverrideBtn.addEventListener('click', cancelStyleOverride);
+cancelStyleOverrideBtn.addEventListener('click', cancelStyleOverride);
+applyStyleOverrideBtn.addEventListener('click', applyStyleOverride);
+resetToPaletteBtn.addEventListener('click', resetToDefaultPalette);
+
+// @agent:StyleOverrides:extension
+// Region Color Override panel elements and event listeners
+const regionColorPanel = document.getElementById('regionColorPanel');
+const closeRegionColorBtn = document.getElementById('closeRegionColorBtn');
+const cancelRegionColorBtn = document.getElementById('cancelRegionColorBtn');
+const applyRegionColorBtn = document.getElementById('applyRegionColorBtn');
+const resetRegionColorBtn = document.getElementById('resetRegionColorBtn');
+
+closeRegionColorBtn.addEventListener('click', cancelRegionColorOverride);
+cancelRegionColorBtn.addEventListener('click', cancelRegionColorOverride);
+applyRegionColorBtn.addEventListener('click', applyRegionColorOverride);
+resetRegionColorBtn.addEventListener('click', resetRegionToDefaultPalette);
 savePaletteBtn.addEventListener('click', savePaletteAs);
 cancelPaletteEditorBtn.addEventListener('click', async () => {
   // Revert to original palette if changes were applied
@@ -1021,10 +1047,37 @@ canvas.addEventListener('mousedown', (e) => {
 
 // Prevent default context menu on boxes (only in Design mode)
 canvas.addEventListener('contextmenu', (e) => {
+  // @agent:StyleOverrides:extension
+  // Check for box context menu first
   const box = e.target.closest('.box');
   if (box && state.currentMode === 'design') {
     e.preventDefault();
     showContextMenu(e, box.id);
+    return;
+  }
+
+  // Check for region background context menu (only if no box clicked)
+  if (state.currentMode === 'design') {
+    const headerRegion = document.getElementById('headerRegion');
+    const footerRegion = document.getElementById('footerRegion');
+
+    if (e.target === headerRegion || e.target.closest('#headerRegion') === headerRegion) {
+      // Only show region menu if click is on empty space (not on a box)
+      if (!e.target.closest('.box')) {
+        e.preventDefault();
+        showRegionContextMenu(e, 'header');
+        return;
+      }
+    }
+
+    if (e.target === footerRegion || e.target.closest('#footerRegion') === footerRegion) {
+      // Only show region menu if click is on empty space (not on a box)
+      if (!e.target.closest('.box')) {
+        e.preventDefault();
+        showRegionContextMenu(e, 'footer');
+        return;
+      }
+    }
   }
 });
 
@@ -1290,6 +1343,19 @@ function renderBox(box, region = 'main') {
   boxEl.style.height = box.height + 'px';
   boxEl.style.zIndex = box.zIndex;
 
+  // @agent:StyleOverrides:extension
+  // Apply styleOverrides as inline styles (takes precedence over CSS variables)
+  if (box.styleOverrides && (box.type === 'text' || box.type === 'image' || box.type === 'button')) {
+    if (box.styleOverrides.fill) {
+      boxEl.style.backgroundColor = box.styleOverrides.fill;
+    }
+    if (box.styleOverrides.border) {
+      boxEl.style.borderColor = box.styleOverrides.border;
+    }
+    // Visual indicator for boxes with active overrides
+    boxEl.classList.add('has-style-override');
+  }
+
   // Mark box with region for reference
   boxEl.dataset.region = region;
 
@@ -1308,6 +1374,12 @@ function renderBox(box, region = 'main') {
     content.style.fontSize = box.fontSize + 'px';
     // fontFamily now uses CSS variable --global-font
 
+    // @agent:StyleOverrides:extension
+    // Apply text color override if present
+    if (box.styleOverrides?.textColor) {
+      content.style.color = box.styleOverrides.textColor;
+    }
+
     // Capture state when text editing finishes (blur event)
     content.addEventListener('blur', () => {
       box.content = content.innerHTML;
@@ -1321,6 +1393,12 @@ function renderBox(box, region = 'main') {
     content.style.display = 'flex';
     content.style.alignItems = 'center';
     content.style.justifyContent = 'center';
+
+    // @agent:StyleOverrides:extension
+    // Apply text color override if present
+    if (box.styleOverrides?.textColor) {
+      content.style.color = box.styleOverrides.textColor;
+    }
 
     // Capture state when button text editing finishes (blur event)
     content.addEventListener('blur', () => {
@@ -2279,6 +2357,382 @@ function saveAccordion() {
   closeAccordionEditor();
 
   console.log('Accordion saved:', currentAccordionBox.id);
+}
+
+// @agent:StyleOverrides:authority
+// Style Override Panel Management
+let originalStyleOverrides = null; // Store original state for cancel/revert
+let currentStyleOverrideBox = null; // Track the box being edited
+
+function openStyleOverridePanel(box) {
+  // Store reference to the box being edited
+  currentStyleOverrideBox = box;
+  const panel = document.getElementById('styleOverridePanel');
+  const boxNameSpan = document.getElementById('overrideBoxName');
+  const paletteNameSpan = document.getElementById('currentPaletteName');
+  const applyingToInfo = document.getElementById('applyingToInfo');
+
+  // Get palette reference colors
+  const paletteRefFill = document.getElementById('paletteRefFill');
+  const paletteRefBorder = document.getElementById('paletteRefBorder');
+  const paletteRefText = document.getElementById('paletteRefText');
+
+  // Get override controls
+  const fillPicker = document.getElementById('overrideFillPicker');
+  const fillPreview = document.getElementById('overrideFillPreview');
+  const fillHex = document.getElementById('overrideFillHex');
+
+  const borderPicker = document.getElementById('overrideBorderPicker');
+  const borderPreview = document.getElementById('overrideBorderPreview');
+  const borderHex = document.getElementById('overrideBorderHex');
+
+  const textPicker = document.getElementById('overrideTextPicker');
+  const textPreview = document.getElementById('overrideTextPreview');
+  const textHex = document.getElementById('overrideTextHex');
+
+  // Save original state for cancel/revert
+  if (state.tempGroup.length > 0) {
+    originalStyleOverrides = state.tempGroup.map(b => ({
+      id: b.id,
+      styleOverrides: b.styleOverrides ? {...b.styleOverrides} : null
+    }));
+  } else {
+    originalStyleOverrides = {
+      id: box.id,
+      styleOverrides: box.styleOverrides ? {...box.styleOverrides} : null
+    };
+  }
+
+  // Set panel title
+  if (state.tempGroup.length > 0) {
+    boxNameSpan.textContent = `${state.tempGroup.length} boxes`;
+    applyingToInfo.textContent = `Applying to: ${state.tempGroup.length} boxes in group`;
+  } else {
+    boxNameSpan.textContent = box.name || box.id;
+    applyingToInfo.textContent = `Applying to: ${box.name || box.id}`;
+  }
+
+  // Set current palette name
+  paletteNameSpan.textContent = state.themes.active || 'sketch';
+
+  // Get current palette colors from CSS variables based on box type
+  const styles = getComputedStyle(document.documentElement);
+  let paletteFill, paletteBorder, paletteText;
+
+  if (box.type === 'image') {
+    paletteFill = styles.getPropertyValue('--image-fill').trim() || '#ffffff';
+    paletteBorder = styles.getPropertyValue('--image-border').trim() || '#333333';
+    paletteText = styles.getPropertyValue('--image-color').trim() || '#666666';
+  } else if (box.type === 'button') {
+    paletteFill = styles.getPropertyValue('--button-fill').trim() || '#ffffff';
+    paletteBorder = styles.getPropertyValue('--button-border').trim() || '#333333';
+    paletteText = styles.getPropertyValue('--button-color').trim() || '#000000';
+  } else {
+    // Default to text box variables
+    paletteFill = styles.getPropertyValue('--text-fill').trim() || '#ffffff';
+    paletteBorder = styles.getPropertyValue('--text-border').trim() || '#333333';
+    paletteText = styles.getPropertyValue('--text-color').trim() || '#000000';
+  }
+
+  // Set palette reference swatches
+  paletteRefFill.style.backgroundColor = paletteFill;
+  paletteRefBorder.style.backgroundColor = paletteBorder;
+  paletteRefText.style.backgroundColor = paletteText;
+
+  // Get effective colors for the box (overrides or palette defaults)
+  const effectiveFill = box.styleOverrides?.fill || paletteFill;
+  const effectiveBorder = box.styleOverrides?.border || paletteBorder;
+  const effectiveText = box.styleOverrides?.textColor || paletteText;
+
+  // Populate override controls with effective colors
+  fillPicker.value = effectiveFill;
+  fillPreview.style.backgroundColor = effectiveFill;
+  fillHex.value = effectiveFill;
+
+  borderPicker.value = effectiveBorder;
+  borderPreview.style.backgroundColor = effectiveBorder;
+  borderHex.value = effectiveBorder;
+
+  textPicker.value = effectiveText;
+  textPreview.style.backgroundColor = effectiveText;
+  textHex.value = effectiveText;
+
+  // Show panel
+  panel.classList.remove('hidden');
+
+  // Set up live preview event listeners
+  setupStyleOverrideLivePreview();
+}
+
+function setupStyleOverrideLivePreview() {
+  const fillPicker = document.getElementById('overrideFillPicker');
+  const fillPreview = document.getElementById('overrideFillPreview');
+  const fillHex = document.getElementById('overrideFillHex');
+
+  const borderPicker = document.getElementById('overrideBorderPicker');
+  const borderPreview = document.getElementById('overrideBorderPreview');
+  const borderHex = document.getElementById('overrideBorderHex');
+
+  const textPicker = document.getElementById('overrideTextPicker');
+  const textPreview = document.getElementById('overrideTextPreview');
+  const textHex = document.getElementById('overrideTextHex');
+
+  // Fill color live preview
+  fillPicker.oninput = (e) => {
+    const color = e.target.value;
+    fillPreview.style.backgroundColor = color;
+    fillHex.value = color;
+    applyTemporaryStyleOverride('fill', color);
+  };
+
+  fillHex.oninput = (e) => {
+    const color = e.target.value;
+    if (/^#[0-9A-F]{6}$/i.test(color)) {
+      fillPicker.value = color;
+      fillPreview.style.backgroundColor = color;
+      applyTemporaryStyleOverride('fill', color);
+    }
+  };
+
+  // Border color live preview
+  borderPicker.oninput = (e) => {
+    const color = e.target.value;
+    borderPreview.style.backgroundColor = color;
+    borderHex.value = color;
+    applyTemporaryStyleOverride('border', color);
+  };
+
+  borderHex.oninput = (e) => {
+    const color = e.target.value;
+    if (/^#[0-9A-F]{6}$/i.test(color)) {
+      borderPicker.value = color;
+      borderPreview.style.backgroundColor = color;
+      applyTemporaryStyleOverride('border', color);
+    }
+  };
+
+  // Text color live preview
+  textPicker.oninput = (e) => {
+    const color = e.target.value;
+    textPreview.style.backgroundColor = color;
+    textHex.value = color;
+    applyTemporaryStyleOverride('textColor', color);
+  };
+
+  textHex.oninput = (e) => {
+    const color = e.target.value;
+    if (/^#[0-9A-F]{6}$/i.test(color)) {
+      textPicker.value = color;
+      textPreview.style.backgroundColor = color;
+      applyTemporaryStyleOverride('textColor', color);
+    }
+  };
+}
+
+// @agent:StyleOverrides:extension
+function applyTemporaryStyleOverride(property, value) {
+  // Apply to selected box(es) temporarily (no undo history yet)
+  let targetBoxes = [];
+
+  if (state.tempGroup.length > 0) {
+    targetBoxes = state.tempGroup;
+  } else if (currentStyleOverrideBox) {
+    targetBoxes = [currentStyleOverrideBox];
+  }
+
+  targetBoxes.forEach(box => {
+    if (!box.styleOverrides) {
+      box.styleOverrides = {};
+    }
+    box.styleOverrides[property] = value;
+  });
+
+  renderCurrentPage(); // Re-render to show changes
+  // NOTE: DO NOT push to undo history (temporary change)
+}
+
+// @agent:StyleOverrides:extension
+function applyStyleOverride() {
+  // User clicked "Apply" - changes are now permanent
+  pushHistory('discrete'); // NOW record to undo
+  closeStyleOverridePanel();
+}
+
+// @agent:StyleOverrides:extension
+function cancelStyleOverride() {
+  // Revert to original state
+  if (Array.isArray(originalStyleOverrides)) {
+    // Group mode
+    originalStyleOverrides.forEach(orig => {
+      const boxInfo = findBoxInRegions(orig.id);
+      if (boxInfo) {
+        boxInfo.box.styleOverrides = orig.styleOverrides;
+      }
+    });
+  } else {
+    // Single box mode
+    const boxInfo = findBoxInRegions(originalStyleOverrides.id);
+    if (boxInfo) {
+      boxInfo.box.styleOverrides = originalStyleOverrides.styleOverrides;
+    }
+  }
+
+  renderCurrentPage();
+  closeStyleOverridePanel();
+}
+
+// @agent:StyleOverrides:extension
+function resetToDefaultPalette() {
+  // Remove styleOverrides property from box(es)
+  let targetBoxes = [];
+
+  // Check for group first, then fall back to single box
+  if (state.tempGroup.length > 0) {
+    targetBoxes = state.tempGroup;
+  } else if (currentStyleOverrideBox) {
+    targetBoxes = [currentStyleOverrideBox];
+  }
+
+  targetBoxes.forEach(box => {
+    if (box) {
+      delete box.styleOverrides;
+    }
+  });
+
+  renderCurrentPage(); // Re-render with palette defaults
+  closeStyleOverridePanel();
+  pushHistory('discrete'); // Record reset action
+}
+
+// @agent:StyleOverrides:extension
+function closeStyleOverridePanel() {
+  const panel = document.getElementById('styleOverridePanel');
+  panel.classList.add('hidden');
+
+  // Clear event listeners to prevent memory leaks
+  const fillPicker = document.getElementById('overrideFillPicker');
+  const borderPicker = document.getElementById('overrideBorderPicker');
+  const textPicker = document.getElementById('overrideTextPicker');
+  const fillHex = document.getElementById('overrideFillHex');
+  const borderHex = document.getElementById('overrideBorderHex');
+  const textHex = document.getElementById('overrideTextHex');
+
+  fillPicker.oninput = null;
+  fillHex.oninput = null;
+  borderPicker.oninput = null;
+  borderHex.oninput = null;
+  textPicker.oninput = null;
+  textHex.oninput = null;
+
+  // Clear box reference
+  currentStyleOverrideBox = null;
+}
+
+// @agent:StyleOverrides:extension
+// Region Color Override Panel (simple dedicated panel)
+let currentRegionType = null; // 'header' or 'footer'
+let originalRegionColor = null; // Store original color for cancel
+
+function openRegionColorOverridePanel(regionType) {
+  currentRegionType = regionType;
+  const region = regionType === 'header' ? state.header : state.footer;
+
+  // Store original color for cancel
+  originalRegionColor = region.colorOverride;
+
+  const panel = document.getElementById('regionColorPanel');
+  const regionNameSpan = document.getElementById('regionName');
+  const paletteNameSpan = document.getElementById('regionPaletteName');
+
+  // Update panel title
+  regionNameSpan.textContent = regionType.charAt(0).toUpperCase() + regionType.slice(1);
+  paletteNameSpan.textContent = state.themes.active || 'sketch';
+
+  // Get current palette background color
+  const styles = getComputedStyle(document.documentElement);
+  const paletteColor = regionType === 'header'
+    ? (styles.getPropertyValue('--header-bg').trim() || '#ffffff')
+    : (styles.getPropertyValue('--footer-bg').trim() || '#ffffff');
+
+  // Show palette color swatch
+  const paletteSwatch = document.getElementById('regionPaletteSwatch');
+  paletteSwatch.style.backgroundColor = paletteColor;
+
+  // Get current override or use palette color
+  const currentColor = region.colorOverride || paletteColor;
+
+  // Set color picker to current color
+  const colorPicker = document.getElementById('regionColorPicker');
+  const colorHex = document.getElementById('regionColorHex');
+
+  colorPicker.value = currentColor;
+  colorHex.value = currentColor.toUpperCase();
+
+  // Setup live preview
+  colorPicker.oninput = () => {
+    const color = colorPicker.value;
+    colorHex.value = color.toUpperCase();
+    region.colorOverride = color;
+    renderCurrentPage();
+  };
+
+  colorHex.oninput = () => {
+    let color = colorHex.value.trim();
+    if (!color.startsWith('#')) color = '#' + color;
+    if (/^#[0-9A-Fa-f]{6}$/.test(color)) {
+      colorPicker.value = color;
+      region.colorOverride = color;
+      renderCurrentPage();
+    }
+  };
+
+  // Show panel
+  panel.classList.remove('hidden');
+}
+
+function applyRegionColorOverride() {
+  pushHistory(); // Commit to undo history
+  closeRegionColorOverridePanel();
+}
+
+function cancelRegionColorOverride() {
+  // Revert to original color
+  const region = currentRegionType === 'header' ? state.header : state.footer;
+  region.colorOverride = originalRegionColor;
+  renderCurrentPage();
+  closeRegionColorOverridePanel();
+}
+
+function resetRegionToDefaultPalette() {
+  const region = currentRegionType === 'header' ? state.header : state.footer;
+  region.colorOverride = null;
+  renderCurrentPage();
+
+  // Update panel to show palette color
+  const styles = getComputedStyle(document.documentElement);
+  const paletteColor = currentRegionType === 'header'
+    ? (styles.getPropertyValue('--header-bg').trim() || '#ffffff')
+    : (styles.getPropertyValue('--footer-bg').trim() || '#ffffff');
+
+  const colorPicker = document.getElementById('regionColorPicker');
+  const colorHex = document.getElementById('regionColorHex');
+
+  colorPicker.value = paletteColor;
+  colorHex.value = paletteColor.toUpperCase();
+}
+
+function closeRegionColorOverridePanel() {
+  const panel = document.getElementById('regionColorPanel');
+  panel.classList.add('hidden');
+
+  // Clear event listeners
+  const colorPicker = document.getElementById('regionColorPicker');
+  const colorHex = document.getElementById('regionColorHex');
+  colorPicker.oninput = null;
+  colorHex.oninput = null;
+
+  currentRegionType = null;
+  originalRegionColor = null;
 }
 
 // @agent:RegionManagement:authority
@@ -3287,6 +3741,10 @@ function renderCurrentPage() {
   headerRegion.id = 'headerRegion';
   headerRegion.className = 'header-region';
   headerRegion.style.height = state.header.height + 'px';
+  // @agent:StyleOverrides:extension
+  if (state.header.colorOverride) {
+    headerRegion.style.backgroundColor = state.header.colorOverride;
+  }
   canvas.appendChild(headerRegion);
 
   // Create main content region
@@ -3300,6 +3758,10 @@ function renderCurrentPage() {
   footerRegion.id = 'footerRegion';
   footerRegion.className = 'footer-region';
   footerRegion.style.height = state.footer.height + 'px';
+  // @agent:StyleOverrides:extension
+  if (state.footer.colorOverride) {
+    footerRegion.style.backgroundColor = state.footer.colorOverride;
+  }
   canvas.appendChild(footerRegion);
 
   // Set canvas size (handle both preset and custom sizes)
@@ -3465,6 +3927,19 @@ function showContextMenu(e, boxId) {
   });
   contextMenu.appendChild(linkToAnchorOption);
 
+  // @agent:StyleOverrides:extension
+  // Style Override option (for text, image, and button boxes)
+  if (box.type === 'text' || box.type === 'image' || box.type === 'button') {
+    const styleOverrideOption = document.createElement('div');
+    styleOverrideOption.className = 'context-menu-item';
+    styleOverrideOption.textContent = 'Style Override...';
+    styleOverrideOption.addEventListener('click', () => {
+      openStyleOverridePanel(box);
+      contextMenu.remove();
+    });
+    contextMenu.appendChild(styleOverrideOption);
+  }
+
   // Remove Link option (if box has a link)
   if (box.linkTo) {
     const removeLinkOption = document.createElement('div');
@@ -3541,6 +4016,54 @@ function closeContextMenu() {
     contextMenu = null;
   }
   document.removeEventListener('click', closeContextMenu);
+}
+
+// @agent:ContextMenu:extension
+// @agent:StyleOverrides:extension
+// Region background context menu (header/footer)
+function showRegionContextMenu(e, regionType) {
+  // Remove existing context menu
+  if (contextMenu) {
+    contextMenu.remove();
+  }
+
+  // Create context menu
+  contextMenu = document.createElement('div');
+  contextMenu.className = 'context-menu';
+  contextMenu.style.left = e.clientX + 'px';
+  contextMenu.style.top = e.clientY + 'px';
+
+  // Override Background Color option
+  const overrideColorOption = document.createElement('div');
+  overrideColorOption.className = 'context-menu-item';
+  overrideColorOption.textContent = 'Override Background Color...';
+  overrideColorOption.addEventListener('click', () => {
+    openRegionColorOverridePanel(regionType);
+    contextMenu.remove();
+  });
+  contextMenu.appendChild(overrideColorOption);
+
+  // Reset to Palette option (only show if override exists)
+  const region = regionType === 'header' ? state.header : state.footer;
+  if (region.colorOverride) {
+    const resetOption = document.createElement('div');
+    resetOption.className = 'context-menu-item';
+    resetOption.textContent = 'Reset to Palette';
+    resetOption.addEventListener('click', () => {
+      pushHistory(); // Capture state before reset
+      region.colorOverride = null;
+      renderCurrentPage();
+      contextMenu.remove();
+    });
+    contextMenu.appendChild(resetOption);
+  }
+
+  document.body.appendChild(contextMenu);
+
+  // Close menu on click outside
+  setTimeout(() => {
+    document.addEventListener('click', closeContextMenu);
+  }, 0);
 }
 
 // @agent:UndoSystem:extension
@@ -3853,7 +4376,8 @@ async function saveFile() {
     header: state.header,
     footer: state.footer,
     pages: state.pages,
-    currentPageId: state.currentPageId
+    currentPageId: state.currentPageId,
+    themes: state.themes
   };
 
   const json = JSON.stringify(data, null, 2);
@@ -3945,6 +4469,17 @@ function openFile(e) {
         }
         if (data.footer) {
           state.footer = data.footer;
+        }
+
+        // Load themes if present (v1.1+)
+        if (data.themes) {
+          state.themes = data.themes;
+        } else {
+          // Default themes for backward compatibility
+          state.themes = {
+            active: 'sketch',
+            palettes: {}
+          };
         }
 
         // Update counters

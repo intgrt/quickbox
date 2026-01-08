@@ -301,6 +301,101 @@
     </div>
   </div>
 
+  <!-- @agent:StyleOverrides:authority -->
+  <!-- Style Override Panel -->
+  <div id="styleOverridePanel" class="editor-panel hidden">
+    <div class="style-override-header">
+      <h3>Style Override for: <span id="overrideBoxName"></span></h3>
+      <button id="closeStyleOverrideBtn" class="close-btn">×</button>
+    </div>
+
+    <div class="style-override-content">
+      <!-- Current Palette Reference -->
+      <div class="palette-reference-section">
+        <label>Current Palette (<span id="currentPaletteName"></span>):</label>
+        <div class="color-reference-row">
+          <div class="color-swatch-container">
+            <div class="color-swatch" id="paletteRefFill"></div>
+            <span>Fill</span>
+          </div>
+          <div class="color-swatch-container">
+            <div class="color-swatch" id="paletteRefBorder"></div>
+            <span>Border</span>
+          </div>
+          <div class="color-swatch-container">
+            <div class="color-swatch" id="paletteRefText"></div>
+            <span>Text</span>
+          </div>
+        </div>
+      </div>
+
+      <hr class="section-divider">
+
+      <!-- Override Colors -->
+      <div class="override-colors-section">
+        <label>Override Colors:</label>
+
+        <div class="override-color-row">
+          <span class="color-label">Fill Color:</span>
+          <input type="color" id="overrideFillPicker" class="color-picker">
+          <div class="color-preview" id="overrideFillPreview"></div>
+          <input type="text" id="overrideFillHex" class="hex-input" maxlength="7" placeholder="#ffffff">
+        </div>
+
+        <div class="override-color-row">
+          <span class="color-label">Border Color:</span>
+          <input type="color" id="overrideBorderPicker" class="color-picker">
+          <div class="color-preview" id="overrideBorderPreview"></div>
+          <input type="text" id="overrideBorderHex" class="hex-input" maxlength="7" placeholder="#333333">
+        </div>
+
+        <div class="override-color-row">
+          <span class="color-label">Text Color:</span>
+          <input type="color" id="overrideTextPicker" class="color-picker">
+          <div class="color-preview" id="overrideTextPreview"></div>
+          <input type="text" id="overrideTextHex" class="hex-input" maxlength="7" placeholder="#000000">
+        </div>
+      </div>
+
+      <button id="resetToPaletteBtn" class="reset-btn">Reset to Palette</button>
+
+      <div class="applying-to-info" id="applyingToInfo"></div>
+    </div>
+
+    <div class="style-override-actions">
+      <button id="cancelStyleOverrideBtn" class="btn-secondary">Cancel</button>
+      <button id="applyStyleOverrideBtn" class="btn-primary">Apply</button>
+    </div>
+  </div>
+
+  <!-- @agent:StyleOverrides:authority -->
+  <!-- Region Color Override Panel -->
+  <div id="regionColorPanel" class="region-color-panel hidden">
+    <div class="region-color-header">
+      <h3>Background Color: <span id="regionName"></span></h3>
+      <button id="closeRegionColorBtn" class="close-btn">×</button>
+    </div>
+
+    <div class="region-color-content">
+      <div class="palette-info">
+        <label>Current Palette (<span id="regionPaletteName"></span>):</label>
+        <div class="palette-color-swatch" id="regionPaletteSwatch"></div>
+      </div>
+
+      <div class="color-picker-row">
+        <label>Override Color:</label>
+        <input type="color" id="regionColorPicker" class="color-picker">
+        <input type="text" id="regionColorHex" class="hex-input" maxlength="7" placeholder="#ffffff">
+      </div>
+    </div>
+
+    <div class="region-color-actions">
+      <button id="resetRegionColorBtn" class="btn-secondary">Reset to Palette</button>
+      <button id="cancelRegionColorBtn" class="btn-secondary">Cancel</button>
+      <button id="applyRegionColorBtn" class="btn-primary">Apply</button>
+    </div>
+  </div>
+
   <!-- Hidden file input for images -->
   <input type="file" id="imageInput" accept="image/*" style="display: none;">
 
