@@ -1,6 +1,6 @@
 // QuickBox - Wireframe Mockup Tool
 // Version
-const APP_VERSION = "1.2";
+const APP_VERSION = "1.3";
 
 // @agent:AppConfig:authority
 // Configurable Constants
@@ -1488,8 +1488,13 @@ function renderBox(box, region = 'main') {
     }
   }
 
-  // Resize handles
-  const handles = ['nw', 'n', 'ne', 'w', 'e', 'sw', 's', 'se'];
+  // @agent:AccordionManagement:extension
+  // Resize handles - accordion boxes only get horizontal handles (auto-height)
+  let handles = ['nw', 'n', 'ne', 'w', 'e', 'sw', 's', 'se'];
+  if (box.type === 'accordion') {
+    // Only horizontal resize for accordion boxes (width only)
+    handles = ['w', 'e'];
+  }
   handles.forEach(dir => {
     const handle = document.createElement('div');
     handle.className = `resize-handle ${dir}`;
@@ -1863,14 +1868,38 @@ function renderAccordionContent(content, box) {
     body.style.fontSize = box.fontSize + 'px';
     // fontFamily now uses CSS variable --global-font
 
-    // Toggle logic (works in both design and navigate modes)
+    // @agent:AccordionManagement:extension
+    // Toggle logic with single-expansion (collapse others) and auto-height
     header.addEventListener('click', (e) => {
       e.stopPropagation();
+
+      // Collapse all other items (single expansion mode)
+      box.accordionItems.forEach(otherItem => {
+        if (otherItem.id !== item.id) {
+          otherItem.isExpanded = false;
+        }
+      });
 
       // Toggle current item
       item.isExpanded = !item.isExpanded;
       indicator.textContent = item.isExpanded ? '−' : '+';
       body.style.display = item.isExpanded ? 'block' : 'none';
+
+      // Update all other indicators and bodies
+      box.accordionItems.forEach((otherItem, otherIndex) => {
+        if (otherItem.id !== item.id) {
+          const otherContainer = content.querySelector(`[data-item-id="${otherItem.id}"]`);
+          if (otherContainer) {
+            const otherIndicator = otherContainer.querySelector('.accordion-indicator');
+            const otherBody = otherContainer.querySelector('.accordion-body');
+            otherIndicator.textContent = '+';
+            otherBody.style.display = 'none';
+          }
+        }
+      });
+
+      // Calculate and apply new height
+      calculateAccordionHeight(box);
 
       pushHistory();
     });
@@ -1879,6 +1908,48 @@ function renderAccordionContent(content, box) {
     itemContainer.appendChild(body);
     content.appendChild(itemContainer);
   });
+}
+
+// @agent:AccordionManagement:extension
+// Calculate and apply dynamic height for accordion boxes based on expanded content
+function calculateAccordionHeight(box) {
+  const MIN_HEIGHT = 120;
+  const HEADER_HEIGHT = 41; // Approximate height of each accordion header
+  const PADDING_BORDERS = 14; // Box padding/borders (6px) + bottom padding (8px)
+
+  let totalHeight = 0;
+
+  // Add height for all headers
+  totalHeight += box.accordionItems.length * HEADER_HEIGHT;
+
+  // Add height for expanded body (if any)
+  const expandedItem = box.accordionItems.find(item => item.isExpanded);
+  if (expandedItem) {
+    // Get the actual body element to measure its content height
+    const boxEl = document.getElementById(box.id);
+    if (boxEl) {
+      const bodyEl = boxEl.querySelector(`[data-item-id="${expandedItem.id}"] .accordion-body`);
+      if (bodyEl) {
+        // Use scrollHeight to get full content height including padding
+        totalHeight += bodyEl.scrollHeight;
+      }
+    }
+  }
+
+  // Add padding and borders
+  totalHeight += PADDING_BORDERS;
+
+  // Apply minimum height constraint
+  totalHeight = Math.max(totalHeight, MIN_HEIGHT);
+
+  // Update box height in state
+  box.height = totalHeight;
+
+  // Update DOM immediately (re-render would be expensive)
+  const boxEl = document.getElementById(box.id);
+  if (boxEl) {
+    boxEl.style.height = totalHeight + 'px';
+  }
 }
 
 // @agent:BoxSelection:authority

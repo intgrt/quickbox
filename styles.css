@@ -432,6 +432,12 @@ label {
   color: #999;
 }
 
+/* @agent:Box:override */
+/* Image boxes have zero padding to display images edge-to-edge */
+.box-image .box-content {
+  padding: 0;
+}
+
 .box-content img {
   max-width: 100%;
   height: auto;
@@ -836,7 +842,8 @@ label {
   display: flex;
   flex-direction: column;
   gap: 0;
-  overflow: auto;
+  overflow: visible; /* Changed from auto - accordion boxes use auto-height, content clips at box boundary */
+  padding-bottom: 8px; /* Add bottom spacing when all items collapsed */
 }
 
 .accordion-item-container {

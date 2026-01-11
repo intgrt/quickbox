@@ -1,6 +1,6 @@
 # QuickBox System Design & Architecture
-**Version:** 1.2
-**Last Updated:** 2026-01-08
+**Version:** 1.3
+**Last Updated:** 2026-01-10
 **Purpose:** Comprehensive system design document for implementing features and understanding codebase structure
 
 ---
@@ -431,9 +431,18 @@ Undo History Recorded
 #### Accordion Box
 - Collapsible sections
 - `accordionItems` array stores sections
-- Each item has: id, title, content
+- Each item has: id, title, body, isExpanded
 - Right-click → Accordion Editor Panel
 - Rendered with click handlers to toggle visibility
+
+**Auto-Height Behavior (v1.3):**
+- Accordion boxes dynamically adjust height based on content
+- Single-expansion mode: clicking one item collapses all others (mobile-friendly)
+- Height calculation: (number of items × 41px header height) + expanded body scrollHeight + 14px padding
+- Minimum height: 120px
+- Only horizontal resize handles (width adjustable, height auto-calculated)
+- Works in both Design and Navigate modes
+- Bottom padding: 8px for visual spacing when all items collapsed
 
 ### 6. Linking System
 
@@ -1030,6 +1039,7 @@ const boxInBounds =
 
 ### Backward Compatibility
 - **v1.0 breaking change:** Image storage moved from base64 to file paths
+- **v1.3:** Accordion auto-height behavior - fully backward compatible with v1.0-1.2 files
 - Version checks prevent incompatible file loads
 - Counters recalculated on load for robustness
 
@@ -1053,6 +1063,26 @@ const boxInBounds =
 - File paths stored as relative references (e.g., `"media/logo.png"`)
 - Minimizes JSON file size and token usage during development
 - User responsible for maintaining `/media` folder alongside mockup files
+
+**Development Mode Media Access:**
+- During development with Vite dev server (localhost:5174), client media folders outside the project root can be accessed via `vite.config.js`
+- The `server.fs.allow` array in `vite.config.js` specifies additional directories the dev server can serve
+- **Important:** This configuration is specific to THIS Vite instance only and does not affect other Vite projects
+- Example configuration:
+  ```javascript
+  export default {
+    server: {
+      fs: {
+        allow: [
+          '.',  // Current project directory
+          'D:/Datafiles5/_Projects and Ideas/_Active 2024/integrate counselling/Media'
+        ]
+      }
+    }
+  }
+  ```
+- When deployed to Firebase or other hosting, media paths should be relative to the deployment root (e.g., `/media/` or `/client-media/`)
+- See `vite.config.js` for current development media path configuration
 
 ---
 
