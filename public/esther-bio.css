@@ -1,0 +1,546 @@
+/* ========================================
+   TYPOGRAPHY & SPACING REFERENCE
+   ========================================
+
+   Setting                          | Current Value
+   ---------------------------------|----------------------------------
+   Heading Font                     | Assistant
+   Heading Size (H2)                | 24pt
+   Heading Color                    | #304473 (dark blue)
+   Heading Margin Before            | 0px (implicit)
+   Heading Margin After             | 20px (general), 5px (sidebar/bio sections)
+   Body/Text Font                   | Assistant
+   Body Font Size                   | 18px
+   Body/Text Color                  | #3d404d (dark grey)
+   Paragraph Line Spacing           | 1.3
+   Paragraph Margin Before          | 0px (implicit)
+   Paragraph Margin After           | 15px (general), 5px (bio sections)
+   Box Padding (Sidebar)            | 8px vertical, 15px horizontal
+   Box Padding (Bio Sections)       | 8px vertical, 15px horizontal
+   CTA Button Spacing               | 5px top and bottom
+   Section Padding                  | 5px
+   Section Margin Bottom            | 5px
+   Bullet List Item Spacing         | 8px
+   Bullet List Line Height          | 1.3 (inherited)
+   Canvas Background                | #f0f0f0 (light grey)
+   Box Shadow                       | 4px 4px 4px 2px #d4d4d4 (offset-x, offset-y, blur, spread, color)
+
+   ======================================== */
+
+/* ========================================
+   CSS VARIABLES - Adjust these for layout customization
+   ======================================== */
+:root {
+    /* Layout Widths */
+    --left-column-width: 33.333%;  /* Left sidebar width (1/3) */
+    --right-column-width: 66.667%; /* Right content width (2/3) */
+    --max-container-width: 1200px; /* Maximum page width */
+
+    /* Column Gap */
+    --column-gap: 40px;            /* Space between left and right columns */
+
+    /* Spacing */
+    --section-padding: 5px;        /* Padding within sections */
+    --section-margin-bottom: 5px;  /* Space between sections */
+    --mobile-padding: 20px;        /* Padding on mobile */
+    --sidebar-box-padding: 15px;   /* Interior padding for sidebar boxes */
+    --bio-section-padding: 5px;    /* Interior padding for bio content sections */
+
+    /* Header/Footer */
+    --header-height: auto;         /* Header height (auto-adjusts) */
+    --footer-height: 100px;        /* Footer height */
+
+    /* Colors (from QuickBox palette) */
+    --primary-bg: #e4edf2;         /* Light blue background */
+    --accent-bg: #e4e4f2;          /* Light purple accent */
+    --text-color: #3d404d;         /* Dark grey text */
+    --heading-color: #304473;      /* Dark blue heading text */
+    --border-color: #cccccc;       /* Light gray borders */
+    --white: #ffffff;              /* White */
+    --sidebar-box-bg: #ffffff;     /* Sidebar section box background */
+    --canvas-bg: #f0f0f0;          /* Light grey canvas background */
+
+    /* Typography */
+    --font-family: 'Assistant', Arial, Helvetica, sans-serif;
+    --h2-font-size: 24pt;          /* H2 headings */
+    --body-font-size: 18px;        /* Body text */
+    --small-font-size: 16px;       /* Small text */
+
+    /* Button */
+    --button-padding: 12px 24px;   /* Button padding */
+    --button-border-radius: 8px;   /* Button border radius */
+
+    /* Mobile Breakpoint */
+    --mobile-breakpoint: 768px;    /* Screen width for mobile layout */
+}
+
+/* ========================================
+   GLOBAL STYLES
+   ======================================== */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: var(--font-family);
+    font-size: var(--body-font-size);
+    line-height: 1.3;
+    color: var(--text-color);
+    background-color: var(--canvas-bg);
+}
+
+h1, h2, h3 {
+    color: var(--heading-color);
+}
+
+h2 {
+    font-size: var(--h2-font-size);
+    margin-bottom: 20px;
+    font-weight: bold;
+}
+
+p {
+    margin-bottom: 15px;
+}
+
+ul {
+    margin-left: 20px;
+}
+
+li {
+    margin-bottom: 8px;
+}
+
+a {
+    color: var(--text-color);
+    text-decoration: none;
+}
+
+img {
+    max-width: 100%;
+    height: auto;
+    display: block;
+}
+
+/* ========================================
+   HEADER
+   ======================================== */
+.site-header {
+    background-color: var(--primary-bg);
+    padding: 15px var(--section-padding);
+    border-bottom: 2px solid var(--border-color);
+}
+
+.header-container {
+    max-width: var(--max-container-width);
+    margin: 0 auto;
+}
+
+/* Header Top Row - Logo/Title and Contact */
+.header-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    gap: 20px;
+}
+
+.logo-section {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    flex: 1;
+}
+
+.logo-box {
+    flex-shrink: 0;
+    width: 60px;
+    height: 60px;
+    border: 2px solid var(--border-color);
+    background-color: var(--white);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.logo-box img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.title-tagline {
+    flex: 1;
+}
+
+.title-tagline h1 {
+    font-size: 28px;
+    margin: 0 0 5px 0;
+}
+
+.tagline {
+    font-size: 16px;
+    margin: 0;
+    font-style: italic;
+    line-height: 1.3;
+}
+
+.contact-section {
+    text-align: right;
+    flex-shrink: 0;
+}
+
+.phone {
+    font-size: var(--small-font-size);
+    margin: 0 0 8px 0;
+}
+
+.btn-consultation {
+    display: inline-block;
+    background-color: var(--accent-bg);
+    color: var(--text-color);
+    padding: 8px 16px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    font-size: var(--small-font-size);
+    font-weight: 600;
+    text-transform: uppercase;
+    transition: background-color 0.3s;
+}
+
+.btn-consultation:hover {
+    background-color: #d4d4e2;
+}
+
+/* Navigation Menu - Button Style */
+.main-nav ul {
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    justify-content: center;
+}
+
+.main-nav li {
+    margin: 0;
+}
+
+.nav-btn {
+    display: block;
+    background-color: var(--white);
+    color: var(--text-color);
+    padding: 8px 16px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: 500;
+    transition: background-color 0.3s;
+    text-decoration: none;
+}
+
+.nav-btn:hover {
+    background-color: var(--primary-bg);
+}
+
+/* ========================================
+   MAIN CONTENT - TWO COLUMN LAYOUT
+   ======================================== */
+.bio-page {
+    padding: var(--section-padding);
+}
+
+.bio-container {
+    max-width: var(--max-container-width);
+    margin: 0 auto;
+    display: flex;
+    gap: var(--column-gap);
+    align-items: flex-start;
+}
+
+/* ========================================
+   LEFT COLUMN (1/3)
+   ======================================== */
+.left-column {
+    flex: 0 0 var(--left-column-width);
+    background-color: var(--primary-bg);
+    padding: var(--section-padding);
+    border-radius: 8px;
+    position: sticky;
+    top: 20px;
+}
+
+.person-image {
+    margin-bottom: 15px;
+    text-align: center;
+}
+
+.person-image img {
+    width: 100%;
+    max-width: 250px;
+    border-radius: 8px;
+    border: 3px solid var(--border-color);
+    margin: 0 auto;
+}
+
+.sidebar-section {
+    margin-bottom: var(--section-margin-bottom);
+    background-color: var(--sidebar-box-bg);
+    padding: 8px 15px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+}
+
+.sidebar-section h2 {
+    font-size: var(--h2-font-size);
+    margin-bottom: 5px;
+    margin-top: 0;
+}
+
+.sidebar-section ul {
+    list-style-type: circle;
+    list-style-position: outside;
+    margin-left: 20px;
+}
+
+.sidebar-section li {
+    margin-bottom: 8px;
+}
+
+.cta-buttons {
+    margin-top: 5px;
+    margin-bottom: 5px;
+    text-align: center;
+}
+
+.btn-consult {
+    display: inline-block;
+    background-color: var(--accent-bg);
+    color: var(--text-color);
+    padding: var(--button-padding);
+    border-radius: var(--button-border-radius);
+    font-size: var(--body-font-size);
+    font-weight: 600;
+    text-align: center;
+    transition: background-color 0.3s, transform 0.2s;
+    border: 2px solid var(--border-color);
+}
+
+.btn-consult:hover {
+    background-color: #d4d4e2;
+    transform: translateY(-2px);
+}
+
+/* ========================================
+   RIGHT COLUMN (2/3)
+   ======================================== */
+.right-column {
+    flex: 0 0 var(--right-column-width);
+}
+
+.bio-section {
+    margin-bottom: var(--section-margin-bottom);
+    padding: 8px 15px;
+    background-color: var(--sidebar-box-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+}
+
+.bio-section h2 {
+    font-size: var(--h2-font-size);
+    margin-bottom: 5px;
+    margin-top: 0;
+}
+
+.bio-section p {
+    margin-bottom: 5px;
+    text-align: justify;
+}
+
+/* Accordion sections - FAQ Style */
+.accordion-section {
+    background-color: var(--white);
+    border: 1px solid var(--border-color);
+}
+
+.accordion-section h2 {
+    background-color: var(--primary-bg);
+    padding: 15px 20px 15px 50px;
+    margin: 0;
+    cursor: pointer;
+    position: relative;
+    user-select: none;
+}
+
+.accordion-section h2::before {
+    content: "+";
+    position: absolute;
+    left: 20px;
+    font-size: 24px;
+    font-weight: bold;
+    transition: transform 0.3s;
+}
+
+.accordion-section h2.collapsed::before {
+    content: "+";
+}
+
+.accordion-section h2:not(.collapsed)::before {
+    content: "−";
+}
+
+.accordion {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease-out;
+}
+
+.accordion.expanded {
+    max-height: 2000px;
+    transition: max-height 0.5s ease-in;
+}
+
+/* Two-column list styling - inside accordion */
+.accordion .two-column-list {
+    list-style-type: circle;
+    list-style-position: outside;
+    margin-left: 20px;
+    padding: 20px;
+    line-height: 1.3;
+    column-count: 2;
+    column-gap: 30px;
+}
+
+.accordion .two-column-list li {
+    padding: 1px 0;
+    margin-bottom: 8px;
+    break-inside: avoid;
+}
+
+/* Specialties list styling */
+.specialties-list {
+    list-style-type: circle;
+    list-style-position: outside;
+    margin-left: 20px;
+    line-height: 1.3;
+}
+
+.specialties-list li {
+    padding: 1px 0;
+}
+
+/* ========================================
+   FOOTER
+   ======================================== */
+.site-footer {
+    background-color: var(--primary-bg);
+    padding: 30px var(--section-padding);
+    border-top: 2px solid var(--border-color);
+    text-align: center;
+    min-height: var(--footer-height);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.footer-container {
+    max-width: var(--max-container-width);
+    margin: 0 auto;
+}
+
+/* ========================================
+   RESPONSIVE - MOBILE LAYOUT
+   ======================================== */
+@media (max-width: 768px) {
+    /* Header responsive */
+    .header-top {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .logo-section {
+        width: 100%;
+    }
+
+    .contact-section {
+        width: 100%;
+        text-align: left;
+    }
+
+    .title-tagline h1 {
+        font-size: 22px;
+    }
+
+    .tagline {
+        font-size: 14px;
+    }
+
+    /* Main content responsive */
+    .bio-container {
+        flex-direction: column;
+        gap: 20px;
+    }
+
+    .left-column {
+        flex: 0 0 100%;
+        position: static;
+        margin-bottom: 20px;
+    }
+
+    .right-column {
+        flex: 0 0 100%;
+    }
+
+    .main-nav ul {
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .nav-btn {
+        width: 100%;
+        text-align: center;
+    }
+
+    h2 {
+        font-size: 20pt;
+    }
+
+    .bio-page {
+        padding: var(--mobile-padding);
+    }
+
+    .bio-section {
+        padding: var(--mobile-padding);
+    }
+
+    .accordion .two-column-list {
+        column-count: 1;
+    }
+}
+
+@media (max-width: 480px) {
+    .logo h1 {
+        font-size: 20px;
+    }
+
+    .tagline {
+        font-size: 14px;
+    }
+
+    h2 {
+        font-size: 18pt;
+    }
+
+    .btn-consult {
+        width: 100%;
+        padding: 12px;
+    }
+
+    .person-image img {
+        max-width: 180px;
+    }
+}
