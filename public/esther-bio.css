@@ -20,8 +20,8 @@
    CTA Button Spacing               | 5px top and bottom
    Section Padding                  | 5px
    Section Margin Bottom            | 5px
-   Bullet List Item Spacing         | 8px
-   Bullet List Line Height          | 1.3 (inherited)
+   Bullet List Item Spacing         | 0px (default, relies on line-height), 8px (sidebar only)
+   Bullet List Line Height          | 1.3 (provides spacing in column 2, affects wrap-around text)
    Canvas Background                | #f0f0f0 (light grey)
    Box Shadow                       | 4px 4px 4px 2px #d4d4d4 (offset-x, offset-y, blur, spread, color)
 
@@ -109,8 +109,11 @@ ul {
     margin-left: 20px;
 }
 
+/* Note: Column 2 uses line-height (1.3) for spacing between bullets.
+   This margin-bottom is reserved for future use if we decide to add
+   additional spacing beyond line-height in column 2. */
 li {
-    margin-bottom: 8px;
+    margin-bottom: 0px;
 }
 
 a {
@@ -417,7 +420,6 @@ img {
 
 .accordion .two-column-list li {
     padding: 1px 0;
-    margin-bottom: 8px;
     break-inside: avoid;
 }
 
