@@ -33,6 +33,7 @@ const state = {
   currentMode: 'design', // 'design' or 'navigate'
   tempGroup: [], // Temporary group for dragging multiple boxes
   groupSelectMode: false, // Flag for rectangle selection active
+  clipboard: null, // Clipboard for copy/paste across pages
   themes: {
     active: 'sketch',
     palettes: {}
@@ -1156,6 +1157,33 @@ document.addEventListener('keydown', (e) => {
   if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
     e.preventDefault();
     performRedo();
+  }
+
+  // Ctrl+C or Cmd+C (Mac) - COPY
+  if ((e.ctrlKey || e.metaKey) && e.key === 'c' && state.currentMode === 'design') {
+    // Only copy if not in a text input
+    if (!e.target.matches('input, textarea, [contenteditable="true"]')) {
+      e.preventDefault();
+      copyBox();
+    }
+  }
+
+  // Ctrl+V or Cmd+V (Mac) - PASTE
+  if ((e.ctrlKey || e.metaKey) && e.key === 'v' && state.currentMode === 'design') {
+    // Only paste if not in a text input
+    if (!e.target.matches('input, textarea, [contenteditable="true"]')) {
+      e.preventDefault();
+      pasteBox();
+    }
+  }
+
+  // Ctrl+D or Cmd+D (Mac) - DELETE
+  if ((e.ctrlKey || e.metaKey) && e.key === 'd' && state.currentMode === 'design') {
+    // Only delete if not in a text input
+    if (!e.target.matches('input, textarea, [contenteditable="true"]')) {
+      e.preventDefault();
+      deleteSelectedBoxOrGroup();
+    }
   }
 });
 
@@ -3693,6 +3721,292 @@ function duplicateBox(sourceBox) {
   console.log('[DUPLICATE-BOX] Box duplicated successfully:', newBoxId, newBox.name);
 }
 
+// @agent:CopyPaste:authority
+// Copy selected box or group to clipboard
+function copyBox() {
+  // Check if copying a group (multiple boxes selected)
+  if (state.tempGroup.length > 1) {
+    console.log('[COPY] Copying group of', state.tempGroup.length, 'boxes');
+
+    const groupData = [];
+    for (const box of state.tempGroup) {
+      const boxInfo = findBoxInRegions(box.id);
+      if (!boxInfo) {
+        console.log('[COPY] WARNING: Could not find box in regions:', box.id);
+        continue;
+      }
+
+      groupData.push({
+        box: JSON.parse(JSON.stringify(box)),
+        region: boxInfo.region
+      });
+    }
+
+    state.clipboard = {
+      isGroup: true,
+      boxes: groupData
+    };
+
+    console.log('[COPY] Group copied to clipboard:', groupData.length, 'boxes');
+    return;
+  }
+
+  // Single box copy
+  if (!state.selectedBox) {
+    console.log('[COPY] No box selected');
+    return;
+  }
+
+  // Store deep clone in clipboard with region info
+  const boxInfo = findBoxInRegions(state.selectedBox.id);
+  if (!boxInfo) {
+    console.log('[COPY] ERROR: Could not find box in regions');
+    return;
+  }
+
+  state.clipboard = {
+    isGroup: false,
+    box: JSON.parse(JSON.stringify(state.selectedBox)),
+    sourceRegion: boxInfo.region
+  };
+
+  console.log('[COPY] Box copied to clipboard:', state.selectedBox.id, state.selectedBox.name);
+}
+
+// @agent:CopyPaste:extension
+// Paste box or group from clipboard to current page
+function pasteBox() {
+  if (!state.clipboard) {
+    console.log('[PASTE] Clipboard is empty');
+    return;
+  }
+
+  pushHistory(); // Capture state before paste
+
+  // Check if pasting a group
+  if (state.clipboard.isGroup) {
+    console.log('[PASTE] Pasting group of', state.clipboard.boxes.length, 'boxes');
+
+    // Sort clipboard boxes by zIndex to preserve z-order
+    const sortedClipboard = [...state.clipboard.boxes].sort((a, b) => a.box.zIndex - b.box.zIndex);
+    console.log('[PASTE] Sorted by z-index:', sortedClipboard.map(item => `${item.box.id}(z:${item.box.zIndex})`).join(', '));
+
+    const isPage1 = state.currentPageId === 'page-1';
+    const newGroupBoxes = [];
+
+    for (const item of sortedClipboard) {
+      const sourceBox = item.box;
+      const sourceRegion = item.region;
+
+      // Check region edit restrictions (header/footer on non-Page-1)
+      const isHeaderFooter = sourceRegion === 'header' || sourceRegion === 'footer';
+      if (!isPage1 && isHeaderFooter) {
+        console.log('[PASTE] SKIPPING: Cannot paste header/footer box outside Page 1:', sourceBox.id);
+        continue;
+      }
+
+      // Get target array
+      let targetArray = null;
+      if (sourceRegion === 'header') {
+        targetArray = state.header.boxes;
+      } else if (sourceRegion === 'footer') {
+        targetArray = state.footer.boxes;
+      } else {
+        const currentPage = getCurrentPage();
+        if (!currentPage) {
+          console.log('[PASTE] ERROR: No current page');
+          continue;
+        }
+        targetArray = currentPage.boxes;
+      }
+
+      // Increment counter and create new ID
+      state.boxCounter++;
+      const newBoxId = `box-${state.boxCounter}`;
+
+      // Deep clone box from clipboard
+      const newBox = JSON.parse(JSON.stringify(sourceBox));
+
+      // Update properties
+      newBox.id = newBoxId;
+      newBox.name = sourceBox.name + ' Copy';
+      newBox.x = sourceBox.x + 20;
+      newBox.y = sourceBox.y + 20;
+      newBox.zIndex = state.zIndexCounter++;
+      newBox.linkTo = null; // Clear link
+
+      // Handle menu boxes - regenerate menu item IDs
+      if (newBox.type === 'menu' && newBox.menuItems) {
+        newBox.menuItems = regenerateMenuItemIds(newBox.menuItems);
+      }
+
+      // Add to target region array
+      targetArray.push(newBox);
+
+      // Render box
+      renderBox(newBox, sourceRegion);
+
+      // Collect for new group
+      newGroupBoxes.push(newBox);
+
+      console.log('[PASTE] Pasted box:', newBoxId, newBox.name, 'to region:', sourceRegion);
+    }
+
+    // Set new group as tempGroup and visualize
+    state.tempGroup = newGroupBoxes;
+    updateGroupVisualsOnCanvas();
+    updateNavigator();
+    updateCanvasHeight();
+
+    console.log('[PASTE] Group pasted successfully:', newGroupBoxes.length, 'boxes');
+    return;
+  }
+
+  // Single box paste
+  const sourceBox = state.clipboard.box;
+  const sourceRegion = state.clipboard.sourceRegion;
+
+  console.log('[PASTE] Pasting box:', sourceBox.id, sourceBox.name, 'from region:', sourceRegion);
+
+  // Determine target region (paste to same region as source)
+  let targetRegion = sourceRegion;
+  let targetArray = null;
+
+  // Check region edit restrictions (header/footer on non-Page-1)
+  const isPage1 = state.currentPageId === 'page-1';
+  const isHeaderFooter = targetRegion === 'header' || targetRegion === 'footer';
+  if (!isPage1 && isHeaderFooter) {
+    console.log('[PASTE] ERROR: Cannot paste header/footer outside Page 1');
+    alert('Header and footer boxes can only be pasted on Page 1');
+    return;
+  }
+
+  // Get target array
+  if (targetRegion === 'header') {
+    targetArray = state.header.boxes;
+  } else if (targetRegion === 'footer') {
+    targetArray = state.footer.boxes;
+  } else {
+    const currentPage = getCurrentPage();
+    if (!currentPage) {
+      console.log('[PASTE] ERROR: No current page');
+      return;
+    }
+    targetArray = currentPage.boxes;
+  }
+
+  // Increment counter and create new ID
+  state.boxCounter++;
+  const newBoxId = `box-${state.boxCounter}`;
+
+  // Deep clone box from clipboard
+  const newBox = JSON.parse(JSON.stringify(sourceBox));
+
+  // Update properties
+  newBox.id = newBoxId;
+  newBox.name = sourceBox.name + ' Copy';
+  newBox.x = sourceBox.x + 20;
+  newBox.y = sourceBox.y + 20;
+  newBox.zIndex = state.zIndexCounter++;
+  newBox.linkTo = null; // Clear link
+
+  console.log('[PASTE] New box created:', newBoxId, 'at position', { x: newBox.x, y: newBox.y });
+
+  // Handle menu boxes - regenerate menu item IDs
+  if (newBox.type === 'menu' && newBox.menuItems) {
+    console.log('[PASTE] Regenerating menu item IDs for pasted menu box');
+    newBox.menuItems = regenerateMenuItemIds(newBox.menuItems);
+  }
+
+  // Add to target region array
+  targetArray.push(newBox);
+  console.log('[PASTE] Added to', targetRegion, 'region. Total boxes in region:', targetArray.length);
+
+  // Render, update navigator, select
+  renderBox(newBox, targetRegion);
+  updateNavigator();
+  selectBox(newBox);
+  updateCanvasHeight();
+
+  console.log('[PASTE] Box pasted successfully:', newBoxId, newBox.name);
+}
+
+// @agent:DeleteKeyboard:authority
+// Delete selected box or group via keyboard shortcut (Ctrl+D)
+function deleteSelectedBoxOrGroup() {
+  // Check if deleting a group
+  if (state.tempGroup.length > 1) {
+    console.log('[DELETE-KEYBOARD] Deleting group with', state.tempGroup.length, 'boxes');
+
+    pushHistory(); // Capture state before deletion
+
+    // Delete each box in the group
+    state.tempGroup.forEach((groupBox) => {
+      console.log('[DELETE-KEYBOARD] Deleting box:', groupBox.id);
+      deleteBoxDirectly(groupBox);
+    });
+
+    console.log('[DELETE-KEYBOARD] Group deletion complete');
+
+    // Clear the group
+    state.tempGroup = [];
+
+    // Update UI
+    updateNavigator();
+    updateCanvasHeight();
+    return;
+  }
+
+  // Delete single box
+  if (!state.selectedBox) {
+    console.log('[DELETE-KEYBOARD] No box selected');
+    return;
+  }
+
+  console.log('[DELETE-KEYBOARD] Deleting single box:', state.selectedBox.id);
+
+  const boxToDelete = state.selectedBox;
+  const boxEl = document.getElementById(boxToDelete.id);
+
+  if (!boxEl) {
+    console.log('[DELETE-KEYBOARD] ERROR: Box element not found:', boxToDelete.id);
+    return;
+  }
+
+  const region = boxEl.dataset.region;
+
+  // Check if deleting from header/footer and not on Page 1
+  if ((region === 'header' || region === 'footer') && state.currentPageId !== 'page-1') {
+    console.log('[DELETE-KEYBOARD] ERROR: Cannot delete header/footer box outside Page 1');
+    alert('Header and footer boxes can only be deleted on Page 1');
+    return;
+  }
+
+  pushHistory(); // Capture state before deletion
+
+  // Remove from DOM
+  boxEl.remove();
+
+  // Remove from appropriate region array
+  const currentPage = getCurrentPage();
+  if (region === 'header') {
+    state.header.boxes = state.header.boxes.filter(b => b.id !== boxToDelete.id);
+  } else if (region === 'footer') {
+    state.footer.boxes = state.footer.boxes.filter(b => b.id !== boxToDelete.id);
+  } else if (currentPage) {
+    currentPage.boxes = currentPage.boxes.filter(b => b.id !== boxToDelete.id);
+  }
+
+  // Clear selection
+  state.selectedBox = null;
+
+  // Update UI
+  updateNavigator();
+  updateCanvasHeight();
+
+  console.log('[DELETE-KEYBOARD] Box deleted successfully:', boxToDelete.id);
+}
+
 // @agent:MenuManagement:authority
 // Regenerate Menu Item IDs (for duplicated menu boxes)
 function regenerateMenuItemIds(menuItems) {
@@ -3918,12 +4232,16 @@ function showContextMenu(e, boxId) {
       console.log('[DUPLICATE-GROUP] Duplicating group with', state.tempGroup.length, 'boxes');
       console.log('[DUPLICATE-GROUP] Group members:', state.tempGroup.map(b => b.id).join(', '));
 
+      // Sort group by zIndex to preserve z-order in duplicates
+      const sortedGroup = [...state.tempGroup].sort((a, b) => a.zIndex - b.zIndex);
+      console.log('[DUPLICATE-GROUP] Sorted by z-index:', sortedGroup.map(b => `${b.id}(z:${b.zIndex})`).join(', '));
+
       // Track new duplicate box IDs created during duplication
       const newDuplicateIds = [];
       const boxCounterBefore = state.boxCounter;
 
-      state.tempGroup.forEach((groupBox, index) => {
-        console.log('[DUPLICATE-GROUP] Duplicating box', index + 1, 'of', state.tempGroup.length, ':', groupBox.id);
+      sortedGroup.forEach((groupBox, index) => {
+        console.log('[DUPLICATE-GROUP] Duplicating box', index + 1, 'of', sortedGroup.length, ':', groupBox.id, 'z-index:', groupBox.zIndex);
         duplicateBox(groupBox);
         // Each duplicateBox() increments boxCounter, so new ID is box-{boxCounter}
         newDuplicateIds.push(`box-${state.boxCounter}`);

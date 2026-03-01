@@ -1,7 +1,50 @@
 # QuickBox System Design & Architecture
 **Version:** 1.3
-**Last Updated:** 2026-01-10
+**Last Updated:** 2026-03-01
+**Code References Last Verified:** 2026-03-01
 **Purpose:** Comprehensive system design document for implementing features and understanding codebase structure
+
+---
+
+## Who This Document Is For
+
+**Target Audience:** Developers implementing features, maintaining code, or extending QuickBox
+
+**Not a user?** See [README.md](README.md) for quick start guide, features overview, and keyboard shortcuts.
+
+---
+
+## Developer Quick Start
+
+### Running QuickBox
+
+**Direct Browser (no setup):**
+```bash
+# Just open the file
+open index.html
+```
+
+**Development Server (optional):**
+```bash
+npm install
+npm run dev
+# Access at http://localhost:5173
+```
+
+### Finding Code with ANM Markers
+
+QuickBox uses **Agent Navigation Marker (ANM v0.4)** standard:
+```javascript
+// @agent:ComponentName:authority  ← Primary implementation
+// @agent:ComponentName:extension  ← Related/supporting code
+```
+
+Search for markers to locate functionality:
+- `@agent:UndoSystem:authority` → Undo/redo implementation
+- `@agent:BoxDuplication:authority` → Duplicate box logic
+- `@agent:CopyPaste:authority` → Copy/paste functionality
+
+**Common Tasks:** See [Common Development Tasks](#common-development-tasks) section below.
 
 ---
 
@@ -18,12 +61,15 @@
 10. [Mode System](#mode-system)
 11. [Key Algorithms](#key-algorithms)
 12. [Code Organization & File Locations](#code-organization--file-locations)
+13. [Keyboard Shortcuts Reference](#keyboard-shortcuts-reference)
 
 ---
 
 ## Overview
 
 **QuickBox** is a lightweight, browser-based wireframe mockup tool for rapid web page prototyping. It uses a single HTML file with vanilla JavaScript and CSS, allowing users to create multi-page mockups with reusable header/footer regions, drag-and-drop elements, and two interaction modes (Design and Navigate).
+
+**For user-facing features and quick start guide, see [README.md](README.md)**
 
 **Key Characteristics:**
 - Single-file application (index.html + app.js + styles.css)
@@ -1127,3 +1173,29 @@ When adding new features, consider:
 3. Update `openFile()` to handle new fields
 4. Consider backward compatibility for older files
 5. Update README.md and file format documentation
+
+---
+
+## Keyboard Shortcuts Reference
+
+**Design Mode Operations:**
+- **Ctrl+C** (Cmd+C on Mac) - Copy selected box or group to clipboard
+- **Ctrl+V** (Cmd+V on Mac) - Paste box or group from clipboard (works across pages)
+- **Ctrl+D** (Cmd+D on Mac) - Delete selected box or group
+- **Ctrl+Z** (Cmd+Z on Mac) - Undo last action
+- **Ctrl+Y** (Cmd+Y on Mac) - Redo last undone action
+- **Ctrl+Shift+Z** (Cmd+Shift+Z on Mac) - Redo (alternate shortcut)
+
+**Selection Operations:**
+- **Ctrl+Click** (Cmd+Click on Mac) - Multi-select boxes for grouping (toggle add/remove)
+- **Escape** - Clear current group selection
+
+**Implementation Details:**
+- All shortcuts are disabled when typing in text inputs, textareas, or contenteditable elements
+- Copy/paste preserves box properties, region membership, and z-order
+- Group operations maintain relative z-order of boxes
+- See `@agent:CopyPaste:authority` and `@agent:DeleteKeyboard:authority` in app.js
+
+---
+
+**For user-facing documentation, see [README.md](README.md)**
