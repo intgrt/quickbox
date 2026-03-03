@@ -37,7 +37,8 @@ const state = {
   themes: {
     active: 'sketch',
     palettes: {}
-  }
+  },
+  projectMediaPath: null // External media folder path for this project
 };
 
 // @agent:UndoSystem:authority
@@ -60,7 +61,8 @@ function captureSnapshot() {
     header: state.header,
     footer: state.footer,
     pages: state.pages,
-    currentPageId: state.currentPageId
+    currentPageId: state.currentPageId,
+    projectMediaPath: state.projectMediaPath
   }));
 }
 
@@ -103,6 +105,7 @@ function restoreSnapshot(snapshot) {
   state.footer = snapshot.footer;
   state.pages = snapshot.pages;
   state.currentPageId = snapshot.currentPageId;
+  state.projectMediaPath = snapshot.projectMediaPath || null;
 
   // Recalculate counters from max IDs (same pattern as openFile)
   const allBoxes = state.pages.flatMap(p => p.boxes);
@@ -127,6 +130,7 @@ function restoreSnapshot(snapshot) {
   renderCurrentPage();
   updateNavigator();
   updatePageIdentifier();
+  updateMediaPathDisplay();
 }
 
 // @agent:UndoSystem:extension
@@ -742,6 +746,8 @@ const paletteSelector = document.getElementById('paletteSelector');
 const addPageBtn = document.getElementById('addPageBtn');
 const designModeBtn = document.getElementById('designModeBtn');
 const navigateModeBtn = document.getElementById('navigateModeBtn');
+const setMediaFolderBtn = document.getElementById('setMediaFolderBtn');
+const mediaPathDisplay = document.getElementById('mediaPathDisplay');
 
 // Context menu
 let contextMenu = null;
@@ -765,6 +771,7 @@ paletteSelector.addEventListener('change', handlePaletteChange);
 addPageBtn.addEventListener('click', addPage);
 designModeBtn.addEventListener('click', () => setMode('design'));
 navigateModeBtn.addEventListener('click', () => setMode('navigate'));
+setMediaFolderBtn.addEventListener('click', setProjectMediaFolder);
 fileInput.addEventListener('change', openFile);
 imageInput.addEventListener('change', handleImageUpload);
 
@@ -1121,6 +1128,7 @@ async function initializeApp() {
   renderCurrentPage();
   updatePageIdentifier();
   updateModeUI();
+  updateMediaPathDisplay();
   console.log('[App] UI rendered');
 
   // Capture initial state after DOM is ready
@@ -1437,7 +1445,12 @@ function renderBox(box, region = 'main') {
     content.contentEditable = false;
     if (box.content) {
       const img = document.createElement('img');
-      img.src = box.content;
+      // Construct path using project media folder or fallback to local media/
+      img.src = constructImagePath(box.content);
+      img.onerror = () => {
+        console.error('[Image] Failed to load image:', img.src);
+        content.innerHTML = '<div style="color: red; font-size: 10px; padding: 5px;">Image not found. Check that:<br>1) Media path is set correctly<br>2) Image is within _Active 2024 directory</div>';
+      };
       content.appendChild(img);
     }
 
@@ -4550,7 +4563,74 @@ function updateFontSize() {
 }
 
 // @agent:ImageManagement:authority
-// Handle Image Selection - stores relative path to media folder
+// Set project media folder - prompts for path since browser won't expose filesystem paths
+function setProjectMediaFolder() {
+  // Note: We can't use showDirectoryPicker() because browsers don't expose the actual
+  // filesystem path for security reasons. Since we need the real path for Vite's /@fs/
+  // prefix, we prompt the user to enter it manually.
+  const path = prompt(
+    'Enter the full path to your project\'s media folder:\n\n' +
+    '1. Copy the path from Windows Explorer address bar\n' +
+    '2. Paste it here (backslashes will be auto-converted)\n\n' +
+    'Example input: D:\\Datafiles5\\_Projects and Ideas\\_Active 2024\\integrate counselling\\Media\n' +
+    'Will become: D:/Datafiles5/_Projects and Ideas/_Active 2024/integrate counselling/Media',
+    state.projectMediaPath || ''
+  );
+
+  if (path && path.trim()) {
+    // Normalize path: replace backslashes with forward slashes
+    state.projectMediaPath = path.trim().replace(/\\/g, '/');
+    updateMediaPathDisplay();
+
+    // @agent:UndoSystem:extension
+    pushHistory(); // Save state with new media path
+
+    console.log('[Media] Project media path set to:', state.projectMediaPath);
+
+    // Helpful message
+    alert('Media folder set!\n\n' +
+          'Path: ' + state.projectMediaPath + '\n\n' +
+          'Images will now load from this folder when you add image boxes.');
+  }
+}
+
+// @agent:ImageManagement:extension
+// Update the media path display in toolbar
+function updateMediaPathDisplay() {
+  if (state.projectMediaPath) {
+    mediaPathDisplay.textContent = state.projectMediaPath;
+    mediaPathDisplay.style.color = '#333';
+  } else {
+    mediaPathDisplay.textContent = 'No media folder set';
+    mediaPathDisplay.style.color = '#666';
+  }
+}
+
+// @agent:ImageManagement:extension
+// Construct image source path based on project media folder configuration
+function constructImagePath(filename) {
+  // Strip "media/" prefix if present (backward compatibility)
+  const cleanFilename = filename.startsWith('media/') ? filename.substring(6) : filename;
+
+  console.log('[constructImagePath] filename:', filename, '| cleanFilename:', cleanFilename, '| projectMediaPath:', state.projectMediaPath);
+
+  if (state.projectMediaPath) {
+    // Use Vite's /@fs/ prefix to access files outside project root
+    // Convert backslashes to forward slashes for URL compatibility
+    const normalizedPath = state.projectMediaPath.replace(/\\/g, '/');
+    const fullPath = `/@fs/${normalizedPath}/${cleanFilename}`;
+    console.log('[constructImagePath] Using external path:', fullPath);
+    return fullPath;
+  } else {
+    // Fall back to local media/ folder
+    const fallbackPath = `media/${cleanFilename}`;
+    console.log('[constructImagePath] Using fallback local path:', fallbackPath);
+    return fallbackPath;
+  }
+}
+
+// @agent:ImageManagement:authority
+// Handle Image Selection - stores filename and uses project media path
 function handleImageUpload(e) {
   const file = e.target.files[0];
   if (!file) return;
@@ -4559,15 +4639,26 @@ function handleImageUpload(e) {
     // @agent:UndoSystem:extension
     pushHistory(); // Capture state before image selection
 
-    // Store relative path (media/filename.png) instead of base64
-    state.selectedBox.content = "media/" + file.name;
+    // Store just the filename (not the full path)
+    state.selectedBox.content = file.name;
 
     const boxEl = document.getElementById(state.selectedBox.id);
     const content = boxEl.querySelector('.box-content');
     content.innerHTML = '';
     const img = document.createElement('img');
-    img.src = state.selectedBox.content;
+
+    // Construct the actual source path using project media folder
+    img.src = constructImagePath(file.name);
+
+    // Error handling for image load failures
+    img.onerror = () => {
+      console.error('[Image] Failed to load image:', img.src);
+      content.innerHTML = '<div style="color: red; font-size: 10px; padding: 5px;">Image not found. Check that:<br>1) Media path is set correctly<br>2) Image is within _Active 2024 directory</div>';
+    };
+
     content.appendChild(img);
+
+    console.log('[Image] Image set to:', file.name, '→ Source:', img.src);
   }
 
   imageInput.value = '';
@@ -4766,7 +4857,8 @@ async function saveFile() {
     footer: state.footer,
     pages: state.pages,
     currentPageId: state.currentPageId,
-    themes: state.themes
+    themes: state.themes,
+    projectMediaPath: state.projectMediaPath
   };
 
   const json = JSON.stringify(data, null, 2);
@@ -4871,6 +4963,13 @@ function openFile(e) {
           };
         }
 
+        // Load project media path if present (v1.3+)
+        if (data.projectMediaPath) {
+          state.projectMediaPath = data.projectMediaPath;
+        } else {
+          state.projectMediaPath = null;
+        }
+
         // Update counters
         const allBoxes = state.pages.flatMap(p => p.boxes);
         const headerFooterBoxes = [...(state.header.boxes || []), ...(state.footer.boxes || [])];
@@ -4894,6 +4993,7 @@ function openFile(e) {
       updateNavigator();
       renderCurrentPage();
       updatePageIdentifier();
+      updateMediaPathDisplay();
     } catch (err) {
       alert('Error opening file: ' + err.message);
     }
