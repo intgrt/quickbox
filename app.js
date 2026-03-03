@@ -38,7 +38,8 @@ const state = {
     active: 'sketch',
     palettes: {}
   },
-  projectMediaPath: null // External media folder path for this project
+  projectMediaPath: null, // External media folder path for this project
+  globalFont: "'Architects Daughter', cursive" // Global font setting
 };
 
 // @agent:UndoSystem:authority
@@ -1129,6 +1130,11 @@ async function initializeApp() {
   updatePageIdentifier();
   updateModeUI();
   updateMediaPathDisplay();
+
+  // Apply initial font
+  document.documentElement.style.setProperty('--global-font', state.globalFont);
+  fontSelect.value = state.globalFont;
+
   console.log('[App] UI rendered');
 
   // Capture initial state after DOM is ready
@@ -4542,8 +4548,14 @@ function updateFont() {
   const selectedFont = fontSelect.value;
   console.log(`[Font] Setting global font to: ${selectedFont}`);
 
+  // Save to state
+  state.globalFont = selectedFont;
+
   // Set global CSS variable - affects all box content
   document.documentElement.style.setProperty('--global-font', selectedFont);
+
+  // @agent:UndoSystem:extension
+  pushHistory(); // Save font change to undo history
 
   console.log(`[Font] ✓ Global font applied to all elements`);
 }
@@ -4858,7 +4870,8 @@ async function saveFile() {
     pages: state.pages,
     currentPageId: state.currentPageId,
     themes: state.themes,
-    projectMediaPath: state.projectMediaPath
+    projectMediaPath: state.projectMediaPath,
+    globalFont: state.globalFont
   };
 
   const json = JSON.stringify(data, null, 2);
@@ -4970,6 +4983,13 @@ function openFile(e) {
           state.projectMediaPath = null;
         }
 
+        // Load global font if present (v1.3+)
+        if (data.globalFont) {
+          state.globalFont = data.globalFont;
+        } else {
+          state.globalFont = "'Architects Daughter', cursive";
+        }
+
         // Update counters
         const allBoxes = state.pages.flatMap(p => p.boxes);
         const headerFooterBoxes = [...(state.header.boxes || []), ...(state.footer.boxes || [])];
@@ -4994,6 +5014,10 @@ function openFile(e) {
       renderCurrentPage();
       updatePageIdentifier();
       updateMediaPathDisplay();
+
+      // Apply loaded font
+      document.documentElement.style.setProperty('--global-font', state.globalFont);
+      fontSelect.value = state.globalFont;
     } catch (err) {
       alert('Error opening file: ' + err.message);
     }
