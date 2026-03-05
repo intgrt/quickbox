@@ -908,6 +908,14 @@ canvas.addEventListener('click', (e) => {
     currentMode: state.currentMode,
     targetTextContent: e.target.textContent?.substring(0, 20)
   });
+
+  // Auto-dismiss context menu when clicking on contenteditable text
+  const targetContent = e.target.closest('.box-content');
+  if (targetContent && targetContent.getAttribute('contenteditable') === 'true' && contextMenu) {
+    closeContextMenu();
+    console.log('[CANVAS-CLICK] Context menu auto-dismissed - clicked on editable text');
+  }
+
   if (e.target === canvas || !e.target.closest('.box')) {
     if (!state.groupSelectMode) {
       selectBox(null);
