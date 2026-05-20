@@ -749,6 +749,7 @@ const designModeBtn = document.getElementById('designModeBtn');
 const navigateModeBtn = document.getElementById('navigateModeBtn');
 const setMediaFolderBtn = document.getElementById('setMediaFolderBtn');
 const mediaPathDisplay = document.getElementById('mediaPathDisplay');
+const exportHtmlBtn = document.getElementById('exportHtmlBtn');
 
 // Context menu
 let contextMenu = null;
@@ -773,6 +774,7 @@ addPageBtn.addEventListener('click', addPage);
 designModeBtn.addEventListener('click', () => setMode('design'));
 navigateModeBtn.addEventListener('click', () => setMode('navigate'));
 setMediaFolderBtn.addEventListener('click', setProjectMediaFolder);
+exportHtmlBtn.addEventListener('click', startHtmlExport);
 fileInput.addEventListener('change', openFile);
 imageInput.addEventListener('change', handleImageUpload);
 
@@ -4928,7 +4930,7 @@ function openFile(e) {
   if (!file) return;
 
   const reader = new FileReader();
-  reader.onload = (event) => {
+  reader.onload = async (event) => {
     try {
       const data = JSON.parse(event.target.result);
 
@@ -5026,6 +5028,12 @@ function openFile(e) {
       // Apply loaded font
       document.documentElement.style.setProperty('--global-font', state.globalFont);
       fontSelect.value = state.globalFont;
+
+      // Apply loaded palette
+      if (state.themes?.active) {
+        await applyPalette(state.themes.active);
+        paletteSelector.value = state.themes.active;
+      }
     } catch (err) {
       alert('Error opening file: ' + err.message);
     }
@@ -5058,3 +5066,337 @@ canvas.addEventListener('click', (e) => {
     }
   }
 });
+
+// =============================================================================
+// @agent:HTMLExport:authority
+// HTML Export Feature
+// =============================================================================
+
+function collectAllImageBoxes() {
+  const seen = new Set();
+  const allBoxArrays = [
+    state.header.boxes,
+    state.footer.boxes,
+    ...state.pages.map(p => p.boxes)
+  ];
+  allBoxArrays.forEach(boxes => {
+    boxes.forEach(box => {
+      if (box.type === 'image' && box.content) seen.add(box.content);
+    });
+  });
+  return Array.from(seen);
+}
+
+
+async function imageToBase64(filename) {
+  const src = constructImagePath(filename);
+  try {
+    const response = await fetch(src);
+    if (!response.ok) return null;
+    const blob = await response.blob();
+    return new Promise(resolve => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
+    });
+  } catch (e) {
+    return null;
+  }
+}
+
+function getCurrentPaletteVars() {
+  const s = getComputedStyle(document.documentElement);
+  const g = v => s.getPropertyValue(v).trim();
+  return {
+    canvasBg:        g('--canvas-bg')        || '#ffffff',
+    headerBg:        g('--header-bg')        || '#ffffff',
+    footerBg:        g('--footer-bg')        || '#ffffff',
+    textFill:        g('--text-fill')        || '#ffffff',
+    textBorder:      g('--text-border')      || '#333333',
+    textColor:       g('--text-color')       || '#000000',
+    imageFill:       g('--image-fill')       || '#ffffff',
+    imageBorder:     g('--image-border')     || '#333333',
+    imageColor:      g('--image-color')      || '#666666',
+    menuFill:        g('--menu-fill')        || '#ffffff',
+    menuBorder:      g('--menu-border')      || '#333333',
+    menuColor:       g('--menu-color')       || '#000000',
+    buttonFill:      g('--button-fill')      || '#ffffff',
+    buttonBorder:    g('--button-border')    || '#333333',
+    buttonColor:     g('--button-color')     || '#000000',
+    accordionFill:   g('--accordion-fill')   || '#ffffff',
+    accordionBorder: g('--accordion-border') || '#333333',
+    accordionColor:  g('--accordion-color')  || '#000000',
+    globalFont:      g('--global-font')      || "'Architects Daughter', cursive",
+  };
+}
+
+function getExportCSS(v) {
+  return `
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;font-family:${v.globalFont};background:#e8e8e8}
+#export-nav{position:sticky;top:0;z-index:1000;background:#fff;border-bottom:2px solid #333;
+  padding:8px 16px;display:flex;align-items:center;gap:8px;
+  font-family:${v.globalFont};box-shadow:0 2px 4px rgba(0,0,0,0.2)}
+#export-nav span{font-weight:bold;margin-right:8px}
+.export-nav-btn{padding:4px 12px;border:2px solid #333;background:#fff;cursor:pointer;
+  font-family:${v.globalFont};font-size:13px;
+  border-radius:3px 5px 4px 6px/4px 6px 5px 3px;box-shadow:1px 1px 0 #333}
+.export-nav-btn.active{background:#333;color:#fff}
+.export-nav-btn:hover:not(.active){background:#f0f0f0}
+.page-wrapper{display:none;padding:20px;justify-content:center}
+.page-wrapper.visible{display:flex}
+.export-canvas{position:relative;display:flex;flex-direction:column;
+  background:${v.canvasBg};border:2px solid #ccc;box-shadow:4px 4px 0 #333}
+.header-region{position:relative;width:100%;min-height:60px;
+  border-bottom:2px dashed #999;background:${v.headerBg};flex-shrink:0}
+.footer-region{position:relative;width:100%;min-height:60px;
+  border-top:2px dashed #999;background:${v.footerBg};flex-shrink:0}
+.main-region{position:relative;flex:1;min-height:400px}
+.box{position:absolute;border:2px solid ${v.textBorder};
+  border-radius:4px 6px 5px 7px/5px 7px 6px 4px;
+  background:${v.textFill};color:${v.textColor};
+  box-shadow:2px 2px 0 rgba(0,0,0,0.3);min-width:50px;min-height:30px}
+.box-text{background:${v.textFill};border-color:${v.textBorder};color:${v.textColor}}
+.box-image{background:${v.imageFill};border-color:${v.imageBorder};color:${v.imageColor}}
+.button-box{border-radius:8px;background:${v.buttonFill};border-color:${v.buttonBorder};color:${v.buttonColor};cursor:pointer}
+.menu-box{cursor:default;background:${v.menuFill};border-color:${v.menuBorder};color:${v.menuColor}}
+.accordion-box{background:${v.accordionFill};border-color:${v.accordionBorder};color:${v.accordionColor}}
+.box-content{padding:5px;height:100%;width:100%;overflow:auto;font-size:16px;
+  font-family:${v.globalFont};box-sizing:border-box;white-space:pre-wrap;word-wrap:break-word}
+.box-image .box-content{padding:0}
+.box-content img{width:100%;height:100%;display:block;object-fit:cover;object-position:center}
+.box.has-link{cursor:pointer}
+.box.has-link::after{content:'🔗';position:absolute;top:4px;right:4px;font-size:12px;pointer-events:none}
+.menu-content{padding:2px;min-height:30px;cursor:default;
+  display:flex;flex-direction:column;gap:8px;align-items:center;justify-content:space-around}
+.menu-content.horizontal{flex-direction:row}
+.menu-item-container{position:relative;z-index:5}
+.menu-item{padding:3px 6px;background:#f0f0f0;border:2px solid #333;
+  text-align:center;font-size:14px;cursor:default;user-select:none}
+.menu-item-linked{font-weight:bold;cursor:pointer!important}
+.menu-item:hover{background:#e0e0e0}
+.menu-dropdown{position:absolute;top:100%;left:0;background:#fff;border:2px solid #333;
+  padding:4px;z-index:100;display:none;min-width:150px}
+.child-menu-item{font-size:13px;padding:2px 4px;cursor:pointer}
+.child-menu-item:hover{background:#e8e8e8}
+.accordion-content{display:flex;flex-direction:column}
+.accordion-item-container{border-bottom:1px solid #ddd}
+.accordion-header{display:flex;align-items:center;padding:8px 10px;
+  cursor:pointer;background:#f8f8f8;user-select:none;border-bottom:1px solid #eee}
+.accordion-header:hover{background:#f0f0f0}
+.accordion-indicator{margin-right:8px;font-weight:bold}
+.accordion-body{padding:8px 10px;display:none}
+.img-placeholder{display:flex;align-items:center;justify-content:center;
+  width:100%;height:100%;background:#f0f0f0;color:#999;font-size:12px;
+  text-align:center;padding:8px;box-sizing:border-box}
+`;
+}
+
+function generateMenuHTML_export(box) {
+  const dir = box.orientation === 'horizontal' ? ' horizontal' : '';
+  let html = `<div class="menu-content${dir}">`;
+  (box.menuItems || []).forEach(item => {
+    const linkData = item.linkTo ? ` data-link='${JSON.stringify(item.linkTo)}'` : '';
+    html += `<div class="menu-item-container">`;
+    if (item.children && item.children.length > 0) {
+      html += `<div class="menu-item has-children"${linkData}>${item.text} &#9660;</div>`;
+      html += `<div class="menu-dropdown">`;
+      item.children.forEach(child => {
+        const childLink = child.linkTo ? ` data-link='${JSON.stringify(child.linkTo)}'` : '';
+        html += `<div class="child-menu-item${child.linkTo ? ' menu-item-linked' : ''}"${childLink}>${child.text}</div>`;
+      });
+      html += `</div>`;
+    } else {
+      html += `<div class="menu-item${item.linkTo ? ' menu-item-linked' : ''}"${linkData}>${item.text}</div>`;
+    }
+    html += `</div>`;
+  });
+  html += `</div>`;
+  return html;
+}
+
+function generateAccordionHTML_export(box) {
+  if (!box.accordionItems || box.accordionItems.length === 0) {
+    return `<div class="accordion-content"><div style="padding:20px;text-align:center;color:#999">No items</div></div>`;
+  }
+  let html = `<div class="accordion-content">`;
+  box.accordionItems.forEach(item => {
+    const bodyDisplay = item.isExpanded ? 'block' : 'none';
+    const indicator = item.isExpanded ? '&minus;' : '+';
+    html += `<div class="accordion-item-container" data-item-id="${item.id}">`;
+    html += `<div class="accordion-header">`;
+    html += `<span class="accordion-indicator">${indicator}</span>`;
+    html += `<span class="accordion-title-text" style="font-size:${box.fontSize}px">${item.title}</span>`;
+    html += `</div>`;
+    html += `<div class="accordion-body" style="display:${bodyDisplay};font-size:${box.fontSize}px">${item.body || ''}</div>`;
+    html += `</div>`;
+  });
+  html += `</div>`;
+  return html;
+}
+
+function generateBoxHTML_export(box, imageBase64Map) {
+  let boxStyles = `left:${box.x}px;top:${box.y}px;width:${box.width}px;height:${box.height}px;z-index:${box.zIndex};`;
+  let classNames = 'box';
+
+  if (box.type === 'text')      classNames += ' box-text';
+  if (box.type === 'image')     classNames += ' box-image';
+  if (box.type === 'menu')      classNames += ' menu-box';
+  if (box.type === 'button')    classNames += ' button-box';
+  if (box.type === 'accordion') classNames += ' accordion-box';
+
+  if (box.styleOverrides) {
+    if (box.styleOverrides.fill)   boxStyles += `background-color:${box.styleOverrides.fill};`;
+    if (box.styleOverrides.border) boxStyles += `border-color:${box.styleOverrides.border};`;
+  }
+
+  let linkAttr = '';
+  if (box.linkTo) {
+    classNames += ' has-link';
+    linkAttr = ` data-link='${JSON.stringify(box.linkTo)}'`;
+  }
+
+  let contentStyles = `font-size:${box.fontSize || 16}px;`;
+  if (box.styleOverrides?.textColor) contentStyles += `color:${box.styleOverrides.textColor};`;
+
+  let contentHTML = '';
+  if (box.type === 'text') {
+    contentHTML = box.content || '';
+  } else if (box.type === 'button') {
+    contentStyles += 'display:flex;align-items:center;justify-content:center;';
+    contentHTML = box.content || '';
+  } else if (box.type === 'image') {
+    const b64 = box.content && imageBase64Map[box.content];
+    contentHTML = b64
+      ? `<img src="${b64}" alt="">`
+      : `<div class="img-placeholder">${box.content ? box.content + '<br>' : ''}(image not available)</div>`;
+  } else if (box.type === 'menu') {
+    contentStyles += 'padding:0;';
+    contentHTML = generateMenuHTML_export(box);
+  } else if (box.type === 'accordion') {
+    contentStyles += 'padding:0;overflow:hidden;';
+    boxStyles += `height:${exportBoxHeight(box)}px;`;
+    contentHTML = generateAccordionHTML_export(box);
+  }
+
+  return `<div class="${classNames}" style="${boxStyles}"${linkAttr}><div class="box-content" style="${contentStyles}">${contentHTML}</div></div>`;
+}
+
+function exportBoxHeight(box) {
+  const el = document.getElementById(box.id);
+  return el ? el.offsetHeight : box.height;
+}
+
+function regionContentHeight(boxes) {
+  if (!boxes.length) return 0;
+  return Math.max(...boxes.map(b => b.y + exportBoxHeight(b))) + 20;
+}
+
+function generateRegionHTML_export(boxes, regionClass, fixedHeight, colorOverride, imageBase64Map) {
+  const contentH = regionContentHeight(boxes);
+  const h = fixedHeight ? Math.max(fixedHeight, contentH) : Math.max(contentH, 60);
+  let style = `height:${h}px;`;
+  if (colorOverride) style += `background-color:${colorOverride};`;
+  const boxesHTML = boxes.map(b => generateBoxHTML_export(b, imageBase64Map)).join('');
+  return `<div class="${regionClass}" style="${style}">${boxesHTML}</div>`;
+}
+
+async function generateExportHTML(imageBase64Map) {
+  const vars = getCurrentPaletteVars();
+  const css = getExportCSS(vars);
+  const canvasWidths = { desktop: 1200, tablet: 768, mobile: 375 };
+
+  const navBtns = state.pages.map((page, i) =>
+    `<button class="export-nav-btn${i === 0 ? ' active' : ''}" onclick="showPage('${page.id}')" data-page="${page.id}">${page.name}</button>`
+  ).join('');
+
+  const pagesHTML = state.pages.map((page, i) => {
+    const width = page.customWidth || canvasWidths[page.canvasSize || 'desktop'] || 1200;
+    const headerH = Math.max(state.header.height || 80, regionContentHeight(state.header.boxes));
+    const mainH   = Math.max(page.customHeight || 400, regionContentHeight(page.boxes));
+    const footerH = Math.max(state.footer.height || 80, regionContentHeight(state.footer.boxes));
+    const totalH  = headerH + mainH + footerH;
+    const headerHTML = generateRegionHTML_export(state.header.boxes, 'header-region', headerH, state.header.colorOverride, imageBase64Map);
+    const mainHTML   = generateRegionHTML_export(page.boxes, 'main-region', mainH, null, imageBase64Map);
+    const footerHTML = generateRegionHTML_export(state.footer.boxes, 'footer-region', footerH, state.footer.colorOverride, imageBase64Map);
+    return `<div class="page-wrapper${i === 0 ? ' visible' : ''}" id="page-${page.id}">\n<div class="export-canvas" style="width:${width}px;height:${totalH}px;">${headerHTML}${mainHTML}${footerHTML}</div>\n</div>`;
+  }).join('\n');
+
+  const script = `
+function showPage(pageId){
+  document.querySelectorAll('.page-wrapper').forEach(function(p){p.classList.remove('visible')});
+  document.querySelectorAll('.export-nav-btn').forEach(function(b){b.classList.remove('active')});
+  var w=document.getElementById('page-'+pageId);if(w)w.classList.add('visible');
+  var b=document.querySelector('[data-page="'+pageId+'"]');if(b)b.classList.add('active');
+}
+document.addEventListener('DOMContentLoaded',function(){
+  document.querySelectorAll('.has-link').forEach(function(el){
+    el.addEventListener('click',function(){
+      try{var l=JSON.parse(el.dataset.link||'null');if(!l)return;
+        if(l.type==='page')showPage(l.pageId);}catch(e){}
+    });
+  });
+  document.querySelectorAll('.menu-item-linked,.child-menu-item.menu-item-linked').forEach(function(el){
+    el.addEventListener('click',function(e){
+      e.stopPropagation();
+      try{var l=JSON.parse(el.dataset.link||'null');if(l&&l.type==='page')showPage(l.pageId);}catch(e2){}
+    });
+  });
+  document.querySelectorAll('.menu-item.has-children').forEach(function(item){
+    var dd=item.parentElement.querySelector('.menu-dropdown');if(!dd)return;
+    item.addEventListener('mouseenter',function(){dd.style.display='block'});
+    item.addEventListener('mouseleave',function(){setTimeout(function(){if(!dd.matches(':hover'))dd.style.display='none'},200)});
+    dd.addEventListener('mouseleave',function(){dd.style.display='none'});
+  });
+  document.querySelectorAll('.accordion-header').forEach(function(hdr){
+    hdr.addEventListener('click',function(){
+      var body=hdr.nextElementSibling;
+      var open=body.style.display==='block';
+      var ac=hdr.closest('.accordion-content');
+      ac.querySelectorAll('.accordion-body').forEach(function(b){b.style.display='none'});
+      ac.querySelectorAll('.accordion-indicator').forEach(function(ind){ind.textContent='+'});
+      if(!open){body.style.display='block';hdr.querySelector('.accordion-indicator').textContent='−';}
+    });
+  });
+});`;
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QuickBox Export</title>
+<link href="https://fonts.googleapis.com/css2?family=Architects+Daughter&family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+<style>${css}</style>
+</head>
+<body>
+<div id="export-nav"><span>QuickBox</span>${navBtns}</div>
+${pagesHTML}
+<script>${script}<\/script>
+</body>
+</html>`;
+}
+
+async function startHtmlExport() {
+  const imagePaths = collectAllImageBoxes();
+  exportHtmlBtn.textContent = 'Exporting...';
+  exportHtmlBtn.disabled = true;
+
+  const imageBase64Map = {};
+  for (const filename of imagePaths) {
+    imageBase64Map[filename] = await imageToBase64(filename);
+  }
+
+  const html = await generateExportHTML(imageBase64Map);
+  const blob = new Blob([html], { type: 'text/html' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'quickbox-export.html';
+  a.click();
+  URL.revokeObjectURL(url);
+
+  exportHtmlBtn.textContent = 'Export HTML';
+  exportHtmlBtn.disabled = false;
+}

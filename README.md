@@ -46,6 +46,7 @@ A lightweight, browser-based wireframe mockup tool for rapid web page prototypin
 - **Global font control** across all elements ([details](SYSTEM_DESIGN.md#global-font-control))
 - **Hand-drawn aesthetic** using Architects Daughter font
 - **JSON file format** with backward compatibility (v0.7+) ([details](SYSTEM_DESIGN.md#file-format--persistence))
+- **HTML export** generates a self-contained file with all pages and images embedded for sharing ([details](SYSTEM_DESIGN.md#html-export-v13))
 
 ## Technical Stack
 
@@ -91,7 +92,7 @@ A lightweight, browser-based wireframe mockup tool for rapid web page prototypin
 **Option 2: Development server (optional)**
 1. Install dependencies: `npm install`
 2. Run dev server: `npm run dev`
-3. Access at `http://localhost:5173`
+3. Access at `http://localhost:5174`
 4. Vite config provides `/media` folder access during development
 
 ### Code Organization

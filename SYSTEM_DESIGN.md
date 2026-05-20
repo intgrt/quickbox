@@ -28,7 +28,7 @@ open index.html
 ```bash
 npm install
 npm run dev
-# Access at http://localhost:5173
+# Access at http://localhost:5174
 ```
 
 ### Finding Code with ANM Markers
@@ -62,6 +62,7 @@ Search for markers to locate functionality:
 11. [Key Algorithms](#key-algorithms)
 12. [Code Organization & File Locations](#code-organization--file-locations)
 13. [Keyboard Shortcuts Reference](#keyboard-shortcuts-reference)
+14. [HTML Export](#html-export-v13)
 
 ---
 
@@ -769,6 +770,45 @@ state.footer.colorOverride = "#e0e0e0";  // Optional: override footer background
 - Context Menu: app.js lines 1036-1069, 3901-3947 (region detection and menu)
 - Rendering: app.js lines 3597-3600, 3614-3617 (apply background color)
 
+### 12. HTML Export (v1.3)
+
+**Overview:**
+- Exports the current mockup as a self-contained HTML file
+- All pages, boxes, and images are embedded — no external dependencies beyond Google Fonts
+- Output renders in Navigate mode: page navigation, menu dropdowns, accordion toggle, and page links all function
+- Images are base64-encoded from the configured media folder
+
+**Export Flow:**
+1. User clicks Export HTML button in toolbar
+2. Button shows "Exporting..." while processing
+3. Each unique image is fetched and converted to a base64 data URI
+4. CSS variables are read from the live document to capture the active palette as concrete hex values
+5. Each region's required height is measured from live DOM elements (`offsetHeight`) so accordion and other dynamic box heights are captured accurately
+6. A single HTML file is generated and downloaded as `quickbox-export.html`
+
+**Output Structure:**
+- `<style>` block with palette colors baked in as hex values (no CSS variables in export)
+- Sticky page navigation bar with one button per page
+- Each page rendered as a `<div>` (only the first visible on load)
+- Inline `<script>` handling page switching, menu hover dropdowns, accordion toggle, and page link navigation
+
+**Image Handling:**
+- Images are fetched via the configured `/@fs/` media path (requires Vite dev server)
+- Missing or inaccessible images show a placeholder div rather than breaking the layout
+- Images are embedded as data URIs — the exported file has no dependency on the media folder
+
+**Canvas Sizing:**
+- Canvas width taken from `page.canvasSize` or `page.customWidth`
+- Region heights calculated from `offsetHeight` of live DOM box elements, ensuring the exported canvas matches what is visible in QuickBox
+
+**Key Functions:**
+- `@agent:HTMLExport:authority` — `startHtmlExport()`, `generateExportHTML()`, `generateBoxHTML_export()`
+- `collectAllImageBoxes()` — scans all regions and pages for unique image filenames
+- `imageToBase64()` — fetches image and returns data URI
+- `getCurrentPaletteVars()` — reads live CSS variable values for palette baking
+- `exportBoxHeight()` — reads `offsetHeight` from live DOM for accurate region sizing
+- `regionContentHeight()` — calculates required region height from box extents
+
 ---
 
 ## Rendering Pipeline
@@ -919,6 +959,8 @@ These modify canvas dimensions via drag, not box dimensions.
 - File parsed and validated
 - Counters recalculated from max IDs
 - State restored and UI re-rendered
+- Active palette reapplied via `applyPalette(state.themes.active)` — restores all CSS variables
+- Global font reapplied via `--global-font` CSS variable
 - Undo history cleared
 
 ---
@@ -1051,19 +1093,33 @@ const boxInBounds =
 - **Lines 147-150:** Hidden file inputs
 
 ### app.js (Key Sections)
-- **Lines 1-3:** App version constant
-- **Lines 5-20:** Configuration constants (canvas sizes, button defaults)
-- **Lines 22-36:** Global state object
-- **Lines 38-163:** Undo/redo system functions
-- **Lines 165-179:** State initialization
-- **Lines 186-225:** DOM element references
-- **Lines 229-283:** Toolbar event listeners
-- **Lines 314-451:** Group selection logic (rectangle mode)
-- **Lines 453-460:** Context menu event handling
-- **Lines 462-479:** App entry point and initialization
-- **Lines 481-499:** Keyboard shortcuts (Ctrl+Z, Ctrl+Y)
-- **Lines 500+:** Box creation, rendering, editing, navigation functions
-- **Lines 3032-3054:** Image selection handler (stores media/ relative paths)
+
+Use ANM markers to locate functionality. Search for `// @agent:ComponentName:authority` in app.js.
+
+- `@agent:AppConfig:authority` — App version constant and configuration constants (canvas sizes, button defaults)
+- `@agent:StateManagement:authority` — Global state object
+- `@agent:UndoSystem:authority` — Undo/redo system functions
+- `@agent:PaletteSystem:authority` — State initialization and palette setup
+- `@agent:GroupSelection:authority` — Rectangle group selection logic
+- `@agent:ModeToggle:authority` — Design/Navigate mode switching
+- `@agent:BoxManagement:authority` — Box creation
+- `@agent:BoxRendering:authority` — Box rendering and type-specific content
+- `@agent:CtrlClickMultiSelect:authority` — Ctrl+Click multi-select
+- `@agent:BoxSelection:authority` — Box selection logic
+- `@agent:StyleOverrides:authority` — Per-element style override panel
+- `@agent:RegionManagement:authority` — Header/footer region management
+- `@agent:BoxResize:authority` — Box resize drag logic
+- `@agent:Navigator:authority` — Navigator panel (pages & elements list)
+- `@agent:GroupDelete:authority` — Group delete operations
+- `@agent:BoxDuplication:authority` — Duplicate box logic
+- `@agent:CopyPaste:authority` — Copy/paste functionality
+- `@agent:DeleteKeyboard:authority` — Keyboard delete shortcut
+- `@agent:ContextMenu:authority` — Context menu handling
+- `@agent:ImageManagement:authority` — Image selection and media path construction
+- `@agent:CanvasResize:authority` — Canvas resize handles and drag logic
+- `@agent:FileOperations:authority` — Save and open file handling
+- `@agent:PageManagement:authority` — Page add/rename/switch
+- `@agent:PageRendering:authority` — Page rendering pipeline
 
 ### styles.css (Key Sections)
 - **Lines 1-4:** Global box-sizing
