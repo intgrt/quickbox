@@ -1,0 +1,27 @@
+{
+  "version": "1.3",
+  "header": {"height": 80, "boxes": [
+    {"id":"box-1","type":"menu","name":"Shared navigation","x":10,"y":10,"width":550,"height":45,"orientation":"horizontal","menuItems":[
+      {"id":"home","text":"Home & start","linkTo":{"type":"page","target":"page-1"},"children":[]},
+      {"id":"parent","text":"Page 2's menu","linkTo":{"type":"page","target":"page-2"},"children":[{"id":"child","text":"Second <page>","linkTo":{"type":"page","target":"page-2"},"children":[]}]}
+    ]}
+  ]},
+  "footer": {"height":80,"colorOverride":"#eeeeee","boxes":[{"id":"box-7","type":"text","name":"Shared footer","x":10,"y":10,"width":250,"height":30,"content":"Footer retained across pages"}]},
+  "pages": [
+    {"id":"page-1","name":"Home & 'review' <one>","canvasSize":"desktop","boxes":[
+      {"id":"box-2","type":"text","name":"Formatted text","x":20,"y":20,"width":450,"height":60,"content":"<strong>Safe bold</strong> <span style='color:#aa0000'>red</span><script>window.quickboxUnsafe=true</script><img src=x onerror='window.quickboxUnsafe=true'><svg onload='window.quickboxUnsafe=true'></svg>"},
+      {"id":"box-3","type":"button","name":"Go to page 2","x":20,"y":100,"width":150,"height":35,"content":"Page 2","linkTo":{"type":"page","target":"page-2"}},
+      {"id":"box-4","type":"button","name":"Jump down","x":200,"y":100,"width":150,"height":35,"content":"Jump down","linkTo":{"type":"anchor","target":"box-5"}},
+      {"id":"box-5","type":"text","name":"Anchor target","x":20,"y":650,"width":450,"height":50,"content":"Anchor destination"}
+    ]},
+    {"id":"page-2","name":"Second page","canvasSize":"tablet","boxes":[
+      {"id":"box-6","type":"accordion","name":"Accordion","x":20,"y":20,"width":350,"height":120,"accordionItems":[
+        {"id":"question-1","title":"Apostrophes & <angles>","body":"Literal <img src=x onerror=alert(1)> text.\nSeveral lines to check expansion.\nLine 3.\nLine 4.\nLine 5.\nLine 6.","isExpanded":false},
+        {"id":"question-2","title":"Second question","body":"Second answer","isExpanded":false}
+      ]}
+    ]}
+  ],
+  "currentPageId":"page-1",
+  "globalFont":"Georgia, serif",
+  "themes":{"active":"sketch","palettes":{}}
+}

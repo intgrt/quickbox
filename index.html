@@ -36,6 +36,7 @@
         <button id="addButtonBtn" title="Add Button Box">+ Button</button>
         <button id="addAccordionBtn" title="Add Accordion Box">+ Accordion</button>
         <button id="createGroupBtn" title="Create Group - Draw Rectangle to Select Multiple Boxes">Create Group</button>
+        <button id="createModalBtn" title="Create an empty modal or move selected boxes into a modal">Create Modal</button>
         <button id="deleteBtn" title="Delete Selected">Delete</button>
       </div>
 
@@ -96,6 +97,8 @@
       <!-- @agent:Navigator:authority -->
       <!-- Navigator Panel -->
       <div id="navigatorPanel">
+        <button id="toggleNavigatorBtn" type="button" aria-expanded="true" aria-controls="navigatorContents" aria-label="Collapse navigation panel" title="Collapse navigation panel">◀</button>
+        <div id="navigatorContents">
         <!-- Pages Section -->
         <div class="nav-section">
           <div class="nav-section-header">
@@ -109,6 +112,7 @@
         <div class="nav-section">
           <h3>Elements</h3>
           <div id="elementsList"></div>
+        </div>
         </div>
       </div>
 
@@ -409,6 +413,8 @@
   <!-- Hidden file input for opening files -->
   <input type="file" id="fileInput" accept=".json" style="display: none;">
 
+  <script src="document-model.js"></script>
+  <script src="export-runtime.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

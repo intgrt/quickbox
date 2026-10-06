@@ -1,6 +1,6 @@
 // QuickBox - Wireframe Mockup Tool
 // Version
-const APP_VERSION = "1.3";
+const APP_VERSION = "1.3.1";
 
 // @agent:AppConfig:authority
 // Configurable Constants
@@ -43,134 +43,127 @@ const state = {
 };
 
 // @agent:UndoSystem:authority
-// Undo/Redo System Configuration
-const UNDO_HISTORY_SIZE = 20; // Maximum number of undo states to keep in history
-const COALESCE_TIMEOUT_MS = 500; // Debounce timeout for continuous operations (ms)
+const UNDO_HISTORY_SIZE = 20;
+const undoHistory = { past: [], future: [], continuousOp: null, continuousSnapshot: null };
+let savedDocument = null;
+let documentFileHandle = null;
+let documentFileName = 'quickbox-mockup.json';
+let saveInProgress = false;
+let documentReady = false;
+let paletteRequest = 0;
+let documentLoadRequest = 0;
 
-// Undo history state
-const undoHistory = {
-  past: [],              // Array of previous state snapshots
-  future: [],            // Array for redo functionality
-  continuousOp: null,    // Flag: 'drag', 'resize', 'region-resize', or null
-  coalesceTimer: null    // Timer for debouncing continuous operations
-};
-
-// @agent:UndoSystem:extension
-// Capture current state as a JSON snapshot
 function captureSnapshot() {
   return JSON.parse(JSON.stringify({
-    header: state.header,
-    footer: state.footer,
-    pages: state.pages,
-    currentPageId: state.currentPageId,
-    projectMediaPath: state.projectMediaPath
+    header: state.header, footer: state.footer, pages: state.pages,
+    currentPageId: state.currentPageId, projectMediaPath: state.projectMediaPath,
+    globalFont: state.globalFont, themes: state.themes
   }));
 }
 
-// @agent:UndoSystem:extension
-// Add snapshot to undo history (coalesces continuous operations)
+function documentSignature(snapshot = captureSnapshot()) {
+  const {currentPageId, version, ...document} = snapshot;
+  return JSON.stringify(document);
+}
+
+function rememberBefore(snapshot) {
+  undoHistory.past.push(JSON.parse(JSON.stringify(snapshot)));
+  if (undoHistory.past.length > UNDO_HISTORY_SIZE) undoHistory.past.shift();
+  undoHistory.future = [];
+}
+
+// Call immediately before a discrete mutation. Continuous operations supply
+// their start snapshot and commit only if the document actually changed.
 function pushHistory(operationType = 'discrete') {
-  // Skip snapshots during continuous operations (except on completion)
-  if (undoHistory.continuousOp && operationType !== 'continuous-end') {
-    return;
-  }
-
-  const snapshot = captureSnapshot();
-
-  // Coalesce continuous operations with debounce
   if (operationType === 'continuous-end') {
-    clearTimeout(undoHistory.coalesceTimer);
-    undoHistory.coalesceTimer = setTimeout(() => {
-      undoHistory.past.push(snapshot);
-      if (undoHistory.past.length > UNDO_HISTORY_SIZE) {
-        undoHistory.past.shift(); // Remove oldest
-      }
-      undoHistory.future = []; // Clear redo stack
-      undoHistory.continuousOp = null;
-    }, COALESCE_TIMEOUT_MS);
-  } else {
-    // Discrete operations - immediate push
-    undoHistory.past.push(snapshot);
-    if (undoHistory.past.length > UNDO_HISTORY_SIZE) {
-      undoHistory.past.shift();
-    }
-    undoHistory.future = []; // Invalidate redo on new action
+    const before = undoHistory.continuousSnapshot;
+    undoHistory.continuousSnapshot = null;
+    undoHistory.continuousOp = null;
+    if (before && documentSignature(before) !== documentSignature()) rememberBefore(before);
+  } else if (!undoHistory.continuousOp) {
+    rememberBefore(captureSnapshot());
   }
 }
 
-// @agent:UndoSystem:extension
-// Restore state from snapshot and re-render UI
+function beginContinuous(operation) {
+  undoHistory.continuousSnapshot = captureSnapshot();
+  undoHistory.continuousOp = operation;
+}
+
+function resetHistory() {
+  undoHistory.past = [];
+  undoHistory.future = [];
+  undoHistory.continuousOp = null;
+  undoHistory.continuousSnapshot = null;
+}
+
+function closeDocumentEditors() {
+  document.querySelectorAll('dialog.qb-modal').forEach(dialog => dialog.remove());
+  closeMenuEditor();
+  closeAccordionEditor();
+  closeStyleOverridePanel();
+  closeRegionColorOverridePanel();
+  closePaletteEditor();
+  closeContextMenu();
+}
+
 function restoreSnapshot(snapshot) {
-  // Restore serialized state
-  state.header = snapshot.header;
-  state.footer = snapshot.footer;
-  state.pages = snapshot.pages;
-  state.currentPageId = snapshot.currentPageId;
-  state.projectMediaPath = snapshot.projectMediaPath || null;
-
-  // Recalculate counters from max IDs (same pattern as openFile)
-  const allBoxes = state.pages.flatMap(p => p.boxes);
-  const headerFooterBoxes = [...state.header.boxes, ...state.footer.boxes];
-  const combinedBoxes = [...allBoxes, ...headerFooterBoxes];
-
-  if (combinedBoxes.length > 0) {
-    state.boxCounter = Math.max(...combinedBoxes.map(b => parseInt(b.id.split('-')[1])), 0);
-    state.zIndexCounter = Math.max(...combinedBoxes.map(b => b.zIndex), 0) + 1;
-  }
-
-  if (state.pages.length > 0) {
-    state.pageCounter = Math.max(...state.pages.map(p => parseInt(p.id.split('-')[1])), 0);
-  }
-
-  // Clear transient UI state
+  ++paletteRequest; // Invalidate a palette request belonging to the old state.
+  closeDocumentEditors();
+  Object.assign(state, JSON.parse(JSON.stringify(snapshot)));
   state.selectedBox = null;
-  clearTempGroup();
-  closeMenuEditor(); // Close stale editor if open
-
-  // Re-render everything
+  state.tempGroup = [];
+  state.groupSelectMode = false;
+  const boxes = [...state.header.boxes, ...state.footer.boxes, ...state.pages.flatMap(p => p.boxes)];
+  state.boxCounter = Math.max(0, ...boxes.map(b => Number(b.id.split('-')[1])));
+  state.pageCounter = Math.max(0, ...state.pages.map(p => Number(p.id.split('-')[1])));
+  state.zIndexCounter = Math.max(0, ...boxes.map(b => b.zIndex)) + 1;
+  applyThemeVariables(state.themes.variables || {});
+  document.documentElement.style.setProperty('--global-font', state.globalFont);
+  fontSelect.value = state.globalFont;
+  paletteSelector.value = state.themes.active;
   renderCurrentPage();
   updateNavigator();
   updatePageIdentifier();
   updateMediaPathDisplay();
+  updateModeUI();
 }
 
-// @agent:UndoSystem:extension
-// Perform undo - restore previous state
+function discardUncommittedPreviews() {
+  if (currentStyleOverrideBox) cancelStyleOverride();
+  if (currentRegionType) cancelRegionColorOverride();
+}
+
 function performUndo() {
-  if (undoHistory.past.length === 0) {
-    console.log('Nothing to undo');
+  if (undoHistory.continuousOp) return;
+  discardUncommittedPreviews();
+  while (undoHistory.past.length) {
+    const before = undoHistory.past.pop();
+    if (documentSignature(before) === documentSignature()) continue;
+    undoHistory.future.push(captureSnapshot());
+    restoreSnapshot(before);
     return;
   }
-
-  // Save current state to redo stack
-  const currentSnapshot = captureSnapshot();
-  undoHistory.future.push(currentSnapshot);
-
-  // Restore previous state
-  const previousSnapshot = undoHistory.past.pop();
-  restoreSnapshot(previousSnapshot);
-
-  console.log('Undo performed. Undo stack size:', undoHistory.past.length);
 }
 
-// @agent:UndoSystem:extension
-// Perform redo - restore next state
 function performRedo() {
-  if (undoHistory.future.length === 0) {
-    console.log('Nothing to redo');
-    return;
-  }
-
-  // Save current state to undo stack
-  const currentSnapshot = captureSnapshot();
-  undoHistory.past.push(currentSnapshot);
-
-  // Restore future state
-  const futureSnapshot = undoHistory.future.pop();
-  restoreSnapshot(futureSnapshot);
-
-  console.log('Redo performed. Undo stack size:', undoHistory.past.length);
+  if (undoHistory.continuousOp || !undoHistory.future.length) return;
+  discardUncommittedPreviews();
+  undoHistory.past.push(captureSnapshot());
+  if (undoHistory.past.length > UNDO_HISTORY_SIZE) undoHistory.past.shift();
+  restoreSnapshot(undoHistory.future.pop());
 }
+
+function hasUnsavedChanges() {
+  if (!documentReady) return false;
+  const menuDraft = currentEditingMenu && JSON.stringify(currentEditingMenu.menuItems) !== JSON.stringify(findBoxInRegions(currentEditingMenu.id)?.box.menuItems);
+  const accordionDraft = currentAccordionBox && JSON.stringify(currentAccordionBox.accordionItems) !== JSON.stringify(findBoxInRegions(currentAccordionBox.id)?.box.accordionItems);
+  return savedDocument !== documentSignature() || !!menuDraft || !!accordionDraft;
+}
+
+window.addEventListener('beforeunload', event => {
+  if (hasUnsavedChanges()) { event.preventDefault(); event.returnValue = ''; }
+});
 
 // @agent:StateManagement:entry
 // Initialize with default page
@@ -204,25 +197,47 @@ async function loadPaletteManifest() {
       console.error('Failed to load palette manifest');
       return { palettes: [] };
     }
-    return await response.json();
+    const manifest = await response.json();
+    const saved = localStorage.getItem('paletteManifest');
+    return saved ? JSON.parse(saved) : manifest;
   } catch (error) {
     console.error('Error loading palette manifest:', error);
     return { palettes: [] };
   }
 }
 
+function paletteVariables(palette) {
+  const variables = {'--canvas-bg': QuickBoxDocument.color(palette.canvas), '--header-bg': QuickBoxDocument.color(palette.header), '--footer-bg': QuickBoxDocument.color(palette.footer)};
+  for (const type of ['text', 'image', 'menu', 'button', 'accordion']) {
+    const colors = palette.elements[type];
+    variables[`--${type}-fill`] = QuickBoxDocument.color(colors.fill);
+    variables[`--${type}-border`] = QuickBoxDocument.color(colors.border);
+    variables[`--${type}-color`] = QuickBoxDocument.color(colors.textColor);
+  }
+  if (Object.values(variables).some(value => !value)) throw new Error('Palette colors are required');
+  return variables;
+}
+
+async function readPalette(id) {
+  if (!/^[a-z0-9-]+$/.test(id)) throw new Error('Invalid palette ID');
+  const local = JSON.parse(localStorage.getItem('quickboxPalettes') || '{}')[id];
+  if (local) return local;
+  const response = await fetch(`palettes/${id}.json`);
+  if (!response.ok) throw new Error('Palette not found: ' + id);
+  return response.json();
+}
+
 // Apply palette by ID - loads palette JSON and sets CSS variables
-async function applyPalette(paletteId) {
+async function applyPalette(paletteId, recordHistory = false) {
+  const request = ++paletteRequest;
   console.log(`[Palette] Applying palette: ${paletteId}`);
 
   try {
-    const response = await fetch(`palettes/${paletteId}.json`);
-    if (!response.ok) {
-      console.error(`[Palette] Failed to load palette file: ${paletteId}.json`);
-      return;
-    }
-
-    const palette = await response.json();
+    const palette = await readPalette(paletteId);
+    if (request !== paletteRequest) return false;
+    const variables = paletteVariables(palette);
+    if (recordHistory) pushHistory();
+    state.themes.variables = variables;
     console.log(`[Palette] Loaded palette data:`, palette);
 
     // Set canvas and region background colors
@@ -232,7 +247,8 @@ async function applyPalette(paletteId) {
     console.log(`[Palette] Set canvas/region colors - Canvas: ${palette.canvas}, Header: ${palette.header}, Footer: ${palette.footer}`);
 
     // Set element colors for each element type
-    for (const [elementType, colors] of Object.entries(palette.elements)) {
+    for (const elementType of ['text', 'image', 'menu', 'button', 'accordion']) {
+      const colors = palette.elements[elementType];
       document.documentElement.style.setProperty(`--${elementType}-fill`, colors.fill);
       document.documentElement.style.setProperty(`--${elementType}-border`, colors.border);
       document.documentElement.style.setProperty(`--${elementType}-color`, colors.textColor);
@@ -245,8 +261,18 @@ async function applyPalette(paletteId) {
     console.log(`[Palette] Updated active palette in state: ${previousPalette} -> ${paletteId}`);
 
     console.log(`[Palette] ✓ Palette "${palette.name}" applied successfully`);
+    return true;
   } catch (error) {
     console.error('[Palette] Error applying palette:', error);
+    return false;
+  }
+}
+
+function applyThemeVariables(variables) {
+  const root = document.documentElement.style;
+  for (const name of ['--canvas-bg', '--header-bg', '--footer-bg', ...['text', 'image', 'menu', 'button', 'accordion'].flatMap(t => ['fill', 'border', 'color'].map(p => `--${t}-${p}`))]) {
+    if (variables[name]) root.setProperty(name, variables[name]);
+    else root.removeProperty(name);
   }
 }
 
@@ -265,7 +291,9 @@ function handlePaletteChange(event) {
   }
 
   // Apply the selected palette
-  applyPalette(selectedPaletteId);
+  applyPalette(selectedPaletteId, true).then(ok => {
+    if (!ok) { paletteSelector.value = state.themes.active; alert('Unable to load this palette.'); }
+  });
 }
 
 // @agent:PaletteEditor:extension
@@ -350,7 +378,9 @@ function applyPalettePreview() {
 
   // If all valid, apply changes
   if (allValid) {
+    pushHistory();
     updates.forEach(update => {
+      state.themes.variables[update.cssVar] = update.value;
       document.documentElement.style.setProperty(update.cssVar, update.value);
     });
 
@@ -366,13 +396,7 @@ function applyPalettePreview() {
 // Repopulate editor form with palette data
 async function repopulateEditorForm(paletteId) {
   try {
-    const response = await fetch(`palettes/${paletteId}.json`);
-    if (!response.ok) {
-      console.error(`Failed to load palette: ${paletteId}`);
-      return;
-    }
-
-    const palette = await response.json();
+    const palette = await readPalette(paletteId);
 
     // Populate background colors
     document.getElementById('canvasBg').value = palette.canvas.toUpperCase();
@@ -408,7 +432,7 @@ async function repopulateEditorForm(paletteId) {
 // Undo palette preview (Undo button handler)
 async function undoPalettePreview() {
   if (paletteEditorState.originalPaletteId) {
-    await applyPalette(paletteEditorState.originalPaletteId);
+    await applyPalette(paletteEditorState.originalPaletteId, true);
     await repopulateEditorForm(paletteEditorState.originalPaletteId);
     console.log('[PaletteEditor] Preview reverted to original palette');
   }
@@ -428,13 +452,7 @@ async function openPaletteEditor() {
 
   // Load current palette data
   try {
-    const response = await fetch(`palettes/${currentPaletteId}.json`);
-    if (!response.ok) {
-      alert(`Failed to load palette: ${currentPaletteId}`);
-      return;
-    }
-
-    const palette = await response.json();
+    const palette = await readPalette(currentPaletteId);
 
     // Set palette name in header
     editorPaletteName.textContent = palette.name;
@@ -576,6 +594,7 @@ async function savePaletteAs() {
 
   const paletteId = generatePaletteId(name);
   const paletteJSON = buildPaletteJSON();
+  if (!paletteId || paletteId === 'sketch') { alert('Choose a different palette name.'); return; }
 
   // Check if palette ID already exists
   const manifest = await loadPaletteManifest();
@@ -585,6 +604,10 @@ async function savePaletteAs() {
     const overwrite = confirm(`A palette with ID "${paletteId}" already exists. Overwrite?`);
     if (!overwrite) return;
   }
+
+  const localPalettes = JSON.parse(localStorage.getItem('quickboxPalettes') || '{}');
+  localPalettes[paletteId] = paletteJSON;
+  localStorage.setItem('quickboxPalettes', JSON.stringify(localPalettes));
 
   // Create JSON file and download
   const jsonString = JSON.stringify(paletteJSON, null, 2);
@@ -609,8 +632,11 @@ async function savePaletteAs() {
     }
   }
 
-  alert(`Palette "${name}" saved as ${paletteId}.json\n\nTo use this palette:\n1. Move the downloaded file to the palettes/ folder\n2. Add an entry to palettes/index.json if not already there\n3. Refresh the application`);
+  alert(`Palette "${name}" saved in this browser and downloaded as ${paletteId}.json.\nTo distribute it, copy the file into palettes/ and add it to palettes/index.json.`);
 
+  await populatePaletteSelector();
+  await applyPalette(paletteId, true);
+  paletteSelector.value = paletteId;
   closePaletteEditor();
 
   console.log(`[PaletteEditor] Palette saved: ${paletteId}`);
@@ -649,8 +675,11 @@ async function deletePalette() {
   const result = await updatePaletteManifest('remove', { id: currentPaletteId });
 
   if (result.success) {
+    const localPalettes = JSON.parse(localStorage.getItem('quickboxPalettes') || '{}');
+    delete localPalettes[currentPaletteId];
+    localStorage.setItem('quickboxPalettes', JSON.stringify(localPalettes));
     // Switch to default palette
-    await applyPalette('sketch');
+    await applyPalette('sketch', true);
 
     // Update palette selector
     const paletteSelector = document.getElementById('paletteSelector');
@@ -692,6 +721,17 @@ async function populatePaletteSelector() {
 const canvas = document.getElementById('canvas');
 const elementsList = document.getElementById('elementsList');
 const pagesList = document.getElementById('pagesList');
+document.getElementById('createModalBtn').addEventListener('click', createModal);
+const navigatorPanel = document.getElementById('navigatorPanel');
+const toggleNavigatorBtn = document.getElementById('toggleNavigatorBtn');
+toggleNavigatorBtn.addEventListener('click', () => {
+  const collapsed = navigatorPanel.classList.toggle('collapsed');
+  const label = collapsed ? 'Expand navigation panel' : 'Collapse navigation panel';
+  toggleNavigatorBtn.textContent = collapsed ? '▶' : '◀';
+  toggleNavigatorBtn.setAttribute('aria-expanded', String(!collapsed));
+  toggleNavigatorBtn.setAttribute('aria-label', label);
+  toggleNavigatorBtn.title = label;
+});
 const imageInput = document.getElementById('imageInput');
 const fileInput = document.getElementById('fileInput');
 const menuEditorPanel = document.getElementById('menuEditorPanel');
@@ -756,7 +796,7 @@ let contextMenu = null;
 
 // Event Listeners
 newBtn.addEventListener('click', newFile);
-openBtn.addEventListener('click', () => fileInput.click());
+openBtn.addEventListener('click', chooseDocumentFile);
 saveBtn.addEventListener('click', saveFile);
 addTextBtn.addEventListener('click', () => addBox('text'));
 addImageBtn.addEventListener('click', () => addBox('image'));
@@ -766,9 +806,9 @@ addAccordionBtn.addEventListener('click', () => addBox('accordion'));
 deleteBtn.addEventListener('click', deleteSelectedBox);
 fontSelect.addEventListener('change', updateFont);
 fontSizeSelect.addEventListener('change', updateFontSize);
-desktopBtn.addEventListener('click', () => setCanvasSize('desktop'));
-tabletBtn.addEventListener('click', () => setCanvasSize('tablet'));
-mobileBtn.addEventListener('click', () => setCanvasSize('mobile'));
+desktopBtn.addEventListener('click', () => { pushHistory(); setCanvasSize('desktop'); });
+tabletBtn.addEventListener('click', () => { pushHistory(); setCanvasSize('tablet'); });
+mobileBtn.addEventListener('click', () => { pushHistory(); setCanvasSize('mobile'); });
 paletteSelector.addEventListener('change', handlePaletteChange);
 addPageBtn.addEventListener('click', addPage);
 designModeBtn.addEventListener('click', () => setMode('design'));
@@ -824,10 +864,6 @@ applyRegionColorBtn.addEventListener('click', applyRegionColorOverride);
 resetRegionColorBtn.addEventListener('click', resetRegionToDefaultPalette);
 savePaletteBtn.addEventListener('click', savePaletteAs);
 cancelPaletteEditorBtn.addEventListener('click', async () => {
-  // Revert to original palette if changes were applied
-  if (paletteEditorState.originalPaletteId) {
-    await applyPalette(paletteEditorState.originalPaletteId);
-  }
   closePaletteEditor();
 });
 
@@ -1104,6 +1140,8 @@ canvas.addEventListener('contextmenu', (e) => {
 // Initialize
 async function initializeApp() {
   console.log('[App] Starting QuickBox initialization...');
+  const startupControls = document.querySelectorAll('#toolbar button, #toolbar select, #addPageBtn');
+  startupControls.forEach(control => { control.disabled = true; });
 
   // Initialize state
   initializeState();
@@ -1147,11 +1185,11 @@ async function initializeApp() {
 
   console.log('[App] UI rendered');
 
-  // Capture initial state after DOM is ready
-  setTimeout(() => {
-    pushHistory();
-    console.log('[App] Initial undo snapshot captured');
-  }, 100);
+  resetHistory();
+  savedDocument = documentSignature();
+  documentReady = true;
+  startupControls.forEach(control => { control.disabled = false; });
+  updateModeUI();
 
   console.log('[App] ✓ QuickBox initialization complete');
 }
@@ -1233,6 +1271,7 @@ document.addEventListener('click', (e) => {
 // @agent:ModeToggle:authority
 // Mode Management
 function setMode(mode) {
+  document.querySelectorAll('dialog.qb-modal').forEach(dialog => dialog.remove());
   const previousMode = state.currentMode;
   state.currentMode = mode;
 
@@ -1414,6 +1453,15 @@ function renderBox(box, region = 'main') {
   // Add link indicator if box has a link
   if (box.linkTo) {
     boxEl.classList.add('has-link');
+    if (state.currentMode === 'navigate') {
+      boxEl.tabIndex = 0;
+      boxEl.setAttribute('role', box.linkTo.type === 'modal' ? 'button' : 'link');
+      boxEl.addEventListener('keydown', event => {
+        if (event.target === boxEl && (event.key === 'Enter' || event.key === ' ')) {
+          event.preventDefault(); handleLinkClick(box.linkTo);
+        }
+      });
+    }
   }
 
   // Content
@@ -1422,7 +1470,7 @@ function renderBox(box, region = 'main') {
 
   if (box.type === 'text') {
     content.contentEditable = state.currentMode === 'design' ? 'true' : 'false';
-    content.innerHTML = box.content;
+    content.innerHTML = QuickBoxDocument.richHTML(box.content);
     content.style.fontSize = box.fontSize + 'px';
     // fontFamily now uses CSS variable --global-font
 
@@ -1433,13 +1481,25 @@ function renderBox(box, region = 'main') {
     }
 
     // Capture state when text editing finishes (blur event)
+    let textBefore = null;
+    content.addEventListener('focus', () => { textBefore = captureSnapshot(); });
+    content.addEventListener('input', () => { box.content = QuickBoxDocument.richHTML(content.innerHTML); });
+    content.addEventListener('paste', event => {
+      event.preventDefault();
+      const data = event.clipboardData;
+      const html = data.getData('text/html') || QuickBoxDocument.escapeHTML(data.getData('text/plain')).replace(/\r?\n/g, '<br>');
+      document.execCommand('insertHTML', false, QuickBoxDocument.richHTML(html));
+    });
     content.addEventListener('blur', () => {
-      box.content = content.innerHTML;
-      pushHistory();
+      const next = QuickBoxDocument.richHTML(content.innerHTML);
+      box.content = next;
+      if (textBefore && documentSignature(textBefore) !== documentSignature()) rememberBefore(textBefore);
+      content.innerHTML = next;
+      textBefore = null;
     });
   } else if (box.type === 'button') {
     content.contentEditable = state.currentMode === 'design' ? 'true' : 'false';
-    content.innerHTML = box.content;
+    content.innerHTML = QuickBoxDocument.richHTML(box.content);
     content.style.fontSize = box.fontSize + 'px';
     // fontFamily now uses CSS variable --global-font
     content.style.display = 'flex';
@@ -1453,9 +1513,21 @@ function renderBox(box, region = 'main') {
     }
 
     // Capture state when button text editing finishes (blur event)
+    let textBefore = null;
+    content.addEventListener('focus', () => { textBefore = captureSnapshot(); });
+    content.addEventListener('input', () => { box.content = QuickBoxDocument.richHTML(content.innerHTML); });
+    content.addEventListener('paste', event => {
+      event.preventDefault();
+      const data = event.clipboardData;
+      const html = data.getData('text/html') || QuickBoxDocument.escapeHTML(data.getData('text/plain')).replace(/\r?\n/g, '<br>');
+      document.execCommand('insertHTML', false, QuickBoxDocument.richHTML(html));
+    });
     content.addEventListener('blur', () => {
-      box.content = content.innerHTML;
-      pushHistory();
+      const next = QuickBoxDocument.richHTML(content.innerHTML);
+      box.content = next;
+      if (textBefore && documentSignature(textBefore) !== documentSignature()) rememberBefore(textBefore);
+      content.innerHTML = next;
+      textBefore = null;
     });
   } else if (box.type === 'image') {
     content.contentEditable = false;
@@ -1465,7 +1537,7 @@ function renderBox(box, region = 'main') {
       img.src = constructImagePath(box.content);
       img.onerror = () => {
         console.error('[Image] Failed to load image:', img.src);
-        content.innerHTML = '<div style="color: red; font-size: 10px; padding: 5px;">Image not found. Check that:<br>1) Media path is set correctly<br>2) Image is within _Active 2024 directory</div>';
+        content.innerHTML = '<div style="color: red; font-size: 10px; padding: 5px;">Image not found. Check that:<br>1) Image is in media/<br>2) External folder is enabled with QUICKBOX_MEDIA_ROOT</div>';
       };
       content.appendChild(img);
     }
@@ -1659,18 +1731,6 @@ function renderBox(box, region = 'main') {
       handleLinkClick(box.linkTo);
     }
   });
-
-  if (box.type === 'text' || box.type === 'button') {
-    content.addEventListener('input', () => {
-      box.content = content.textContent;
-    });
-
-    content.addEventListener('paste', (e) => {
-      e.preventDefault();
-      const text = e.clipboardData.getData('text/plain');
-      document.execCommand('insertText', false, text);
-    });
-  }
 
   // Resize handles
   boxEl.querySelectorAll('.resize-handle').forEach(handle => {
@@ -1930,6 +1990,7 @@ function renderAccordionContent(content, box) {
     header.addEventListener('click', (e) => {
       e.stopPropagation();
 
+      pushHistory();
       // Collapse all other items (single expansion mode)
       box.accordionItems.forEach(otherItem => {
         if (otherItem.id !== item.id) {
@@ -1957,8 +2018,7 @@ function renderAccordionContent(content, box) {
 
       // Calculate and apply new height
       calculateAccordionHeight(box);
-
-      pushHistory();
+      updateCanvasHeight();
     });
 
     itemContainer.appendChild(header);
@@ -2088,7 +2148,7 @@ let currentEditingMenu = null;
 function openMenuEditor(box) {
   if (box.type !== 'menu') return;
   
-  currentEditingMenu = box;
+  currentEditingMenu = JSON.parse(JSON.stringify(box));
   menuEditorPanel.classList.remove('hidden');
   renderMenuEditor();
 }
@@ -2269,13 +2329,18 @@ function showMenuItemLinkDialog(item) {
 function saveMenu() {
   if (!currentEditingMenu) return;
 
-  pushHistory(); // Capture state before menu save
+  const original = findBoxInRegions(currentEditingMenu.id)?.box;
+  if (!original) return;
+  if (JSON.stringify(original.menuItems) !== JSON.stringify(currentEditingMenu.menuItems)) {
+    pushHistory();
+    original.menuItems = JSON.parse(JSON.stringify(currentEditingMenu.menuItems));
+  }
 
   // Update the menu box rendering
   const boxEl = document.getElementById(currentEditingMenu.id);
   if (boxEl) {
     const content = boxEl.querySelector('.box-content');
-    renderMenuContent(content, currentEditingMenu);
+    renderMenuContent(content, original);
   }
 
   alert('Menu saved successfully!');
@@ -2347,7 +2412,7 @@ let currentAccordionBox = null;
 function openAccordionEditor(box) {
   if (box.type !== 'accordion') return;
 
-  currentAccordionBox = box;
+  currentAccordionBox = JSON.parse(JSON.stringify(box));
   accordionEditorPanel.classList.remove('hidden');
   renderAccordionEditor();
 
@@ -2470,29 +2535,36 @@ function moveAccordionItem(fromIndex, toIndex) {
 function saveAccordion() {
   if (!currentAccordionBox) return;
 
-  pushHistory(); // Capture state before accordion save
+  const original = findBoxInRegions(currentAccordionBox.id)?.box;
+  if (!original) return;
+  if (JSON.stringify(original.accordionItems) !== JSON.stringify(currentAccordionBox.accordionItems)) {
+    pushHistory();
+    original.accordionItems = JSON.parse(JSON.stringify(currentAccordionBox.accordionItems));
+  }
 
   // Re-render the accordion box
   const boxEl = document.getElementById(currentAccordionBox.id);
   if (boxEl) {
     const content = boxEl.querySelector('.box-content');
     if (content) {
-      renderAccordionContent(content, currentAccordionBox);
+      renderAccordionContent(content, original);
     }
   }
 
   updateNavigator();
+  calculateAccordionHeight(original);
+  updateCanvasHeight();
   closeAccordionEditor();
-
-  console.log('Accordion saved:', currentAccordionBox.id);
 }
 
 // @agent:StyleOverrides:authority
 // Style Override Panel Management
+let stylePreviewBefore = null;
 let originalStyleOverrides = null; // Store original state for cancel/revert
 let currentStyleOverrideBox = null; // Track the box being edited
 
 function openStyleOverridePanel(box) {
+  stylePreviewBefore = captureSnapshot();
   // Store reference to the box being edited
   currentStyleOverrideBox = box;
   const panel = document.getElementById('styleOverridePanel');
@@ -2682,7 +2754,7 @@ function applyTemporaryStyleOverride(property, value) {
 // @agent:StyleOverrides:extension
 function applyStyleOverride() {
   // User clicked "Apply" - changes are now permanent
-  pushHistory('discrete'); // NOW record to undo
+  if (stylePreviewBefore && documentSignature(stylePreviewBefore) !== documentSignature()) rememberBefore(stylePreviewBefore);
   closeStyleOverridePanel();
 }
 
@@ -2711,6 +2783,7 @@ function cancelStyleOverride() {
 
 // @agent:StyleOverrides:extension
 function resetToDefaultPalette() {
+  if (stylePreviewBefore) rememberBefore(stylePreviewBefore);
   // Remove styleOverrides property from box(es)
   let targetBoxes = [];
 
@@ -2729,7 +2802,7 @@ function resetToDefaultPalette() {
 
   renderCurrentPage(); // Re-render with palette defaults
   closeStyleOverridePanel();
-  pushHistory('discrete'); // Record reset action
+
 }
 
 // @agent:StyleOverrides:extension
@@ -2754,14 +2827,17 @@ function closeStyleOverridePanel() {
 
   // Clear box reference
   currentStyleOverrideBox = null;
+  stylePreviewBefore = null;
 }
 
 // @agent:StyleOverrides:extension
 // Region Color Override Panel (simple dedicated panel)
+let regionPreviewBefore = null;
 let currentRegionType = null; // 'header' or 'footer'
 let originalRegionColor = null; // Store original color for cancel
 
 function openRegionColorOverridePanel(regionType) {
+  regionPreviewBefore = captureSnapshot();
   currentRegionType = regionType;
   const region = regionType === 'header' ? state.header : state.footer;
 
@@ -2819,7 +2895,7 @@ function openRegionColorOverridePanel(regionType) {
 }
 
 function applyRegionColorOverride() {
-  pushHistory(); // Commit to undo history
+  if (regionPreviewBefore && documentSignature(regionPreviewBefore) !== documentSignature()) rememberBefore(regionPreviewBefore);
   closeRegionColorOverridePanel();
 }
 
@@ -2861,6 +2937,7 @@ function closeRegionColorOverridePanel() {
 
   currentRegionType = null;
   originalRegionColor = null;
+  regionPreviewBefore = null;
 }
 
 // @agent:RegionManagement:authority
@@ -2887,6 +2964,7 @@ function getRegionBoundaries() {
 
 // Detect which region a point is in
 function detectRegion(clientY) {
+  if (getCurrentPage()?.isModal) return 'main';
   const boundaries = getRegionBoundaries();
   if (!boundaries) return 'main';
 
@@ -2953,8 +3031,9 @@ function transferBoxToRegion(box, sourceRegion, sourceArray, targetRegion) {
 // @agent:UndoSystem:extension
 // Region divider drag functionality
 function startRegionDividerDrag(e, regionType) {
+  if (state.currentMode !== 'design') return;
   // Mark continuous operation start
-  undoHistory.continuousOp = 'region-resize';
+  beginContinuous('region-resize');
 
   // Only allow in design mode
   if (state.currentMode !== 'design') return;
@@ -3070,12 +3149,11 @@ function startDrag(e, box) {
 }
 
 function startSingleDrag(e, box) {
-  // Mark continuous operation start
-  undoHistory.continuousOp = 'drag';
 
   // Find box and its current region
   const boxInfo = findBoxInRegions(box.id);
   if (!boxInfo) return;
+  beginContinuous('drag');
 
   const sourceRegion = boxInfo.region;
   const sourceArray = boxInfo.array;
@@ -3146,6 +3224,7 @@ function startSingleDrag(e, box) {
       boxEl.style.left = box.x + 'px';
       boxEl.style.top = box.y + 'px';
       alert('Header and footer can only be edited on Page 1');
+      pushHistory('continuous-end');
       return;
     }
 
@@ -3173,7 +3252,7 @@ function startSingleDrag(e, box) {
 // Group drag mode - drag all boxes in temp group together
 function startGroupDrag(e, draggedBox) {
   // Mark continuous operation start
-  undoHistory.continuousOp = 'drag';
+  beginContinuous('drag');
 
   console.log('Group drag started with', state.tempGroup.length, 'boxes');
 
@@ -3253,6 +3332,7 @@ function startGroupDrag(e, draggedBox) {
           }
         });
         alert('Header and footer can only be edited on Page 1');
+        pushHistory('continuous-end');
         return;
       }
 
@@ -3293,7 +3373,7 @@ function startGroupDrag(e, draggedBox) {
 // Resize functionality
 function startResize(e, box, direction) {
   // Mark continuous operation start
-  undoHistory.continuousOp = 'resize';
+  beginContinuous('resize');
 
   e.preventDefault();
   const boxEl = document.getElementById(box.id);
@@ -3367,7 +3447,7 @@ function updateCanvasHeight() {
   let footerBoxBottom = 60; // Default min based on box positions
 
   // Check header boxes to see if they exceed the region height
-  if (state.header.boxes.length > 0) {
+  if (!currentPage.isModal && state.header.boxes.length > 0) {
     state.header.boxes.forEach(box => {
       const bottom = box.y + box.height;
       if (bottom > headerBoxBottom) {
@@ -3387,7 +3467,7 @@ function updateCanvasHeight() {
   }
 
   // Check footer boxes to see if they exceed the region height
-  if (state.footer.boxes.length > 0) {
+  if (!currentPage.isModal && state.footer.boxes.length > 0) {
     state.footer.boxes.forEach(box => {
       const bottom = box.y + box.height;
       if (bottom > footerBoxBottom) {
@@ -3418,6 +3498,19 @@ function updateCanvasHeight() {
 // @agent:Navigator:authority
 // Update Navigator (Pages and Elements)
 function updateNavigator() {
+  // Removing an element also removes references to it in the same undo action.
+  const allBoxes = [...state.header.boxes, ...state.footer.boxes, ...state.pages.flatMap(p => p.boxes)];
+  const boxIds = new Set(allBoxes.map(b => b.id));
+  const pageIds = new Set(state.pages.map(p => p.id));
+  function prune(item) {
+    const targets = item.linkTo?.type === 'modal' ? new Set(state.pages.filter(p => p.isModal).map(p => p.id)) : item.linkTo?.type === 'page' ? new Set(state.pages.filter(p => !p.isModal).map(p => p.id)) : boxIds;
+    if (item.linkTo && !targets.has(item.linkTo.target)) {
+      item.linkTo = null;
+      document.getElementById(item.id)?.classList.remove('has-link');
+    }
+    (item.children || item.menuItems || []).forEach(prune);
+  }
+  allBoxes.forEach(prune);
   updatePagesList();
   updateElementsList();
 }
@@ -3428,7 +3521,7 @@ function updatePagesList() {
   state.pages.forEach(page => {
     const item = document.createElement('div');
     item.className = 'page-item';
-    item.textContent = `${page.name} (${page.id})`;
+    item.textContent = `${page.isModal ? '▣ Modal: ' : ''}${page.name} (${page.id})`;
     item.dataset.pageId = page.id;
     item.title = 'Right-click to rename';
 
@@ -3437,7 +3530,8 @@ function updatePagesList() {
     }
 
     item.addEventListener('click', () => {
-      switchToPage(page.id);
+      if (page.isModal && state.currentMode === 'navigate') showModal(page.id);
+      else switchToPage(page.id);
     });
 
     item.addEventListener('contextmenu', (e) => {
@@ -3456,6 +3550,7 @@ function editPageName(page) {
   const newName = prompt(`Edit page name:`, currentName);
   if (newName === null || newName.trim() === '') return;
 
+  pushHistory();
   page.name = newName.trim();
   updatePagesList();
   updatePageIdentifier();
@@ -3471,7 +3566,7 @@ function updateElementsList() {
   const isPage1 = state.currentPageId === 'page-1';
 
   // Add header elements
-  if (state.header.boxes.length > 0) {
+  if (!currentPage.isModal && state.header.boxes.length > 0) {
     const headerLabel = document.createElement('div');
     headerLabel.className = 'element-section-label';
     headerLabel.textContent = '--- Header ---';
@@ -3537,7 +3632,7 @@ function updateElementsList() {
   });
 
   // Add footer elements
-  if (state.footer.boxes.length > 0) {
+  if (!currentPage.isModal && state.footer.boxes.length > 0) {
     const footerLabel = document.createElement('div');
     footerLabel.className = 'element-section-label';
     footerLabel.textContent = '--- Footer ---';
@@ -3598,6 +3693,7 @@ function editElementName(box) {
   const newSuffix = prompt(`Edit element name:\n\n${prefix}`, suffix);
   if (newSuffix === null || newSuffix.trim() === '') return;
 
+  pushHistory();
   box.name = prefix + newSuffix.trim();
   updateElementsList();
 }
@@ -4195,14 +4291,19 @@ function renderCurrentPage() {
   }
 
   // Render header boxes
+  if (!currentPage.isModal) {
   state.header.boxes.forEach(box => renderBox(box, 'header'));
 
+  }
   // Render page boxes in main region
   currentPage.boxes.forEach(box => renderBox(box, 'main'));
 
   // Render footer boxes
+  if (!currentPage.isModal) {
   state.footer.boxes.forEach(box => renderBox(box, 'footer'));
 
+  }
+  canvas.dataset.modal = String(!!currentPage.isModal);
   // Setup region divider drag listeners
   setupRegionDividers();
 
@@ -4334,6 +4435,11 @@ function showContextMenu(e, boxId) {
     contextMenu.remove();
   });
   contextMenu.appendChild(linkToPageOption);
+  const modalOption = document.createElement('div');
+  modalOption.className = 'context-menu-item';
+  modalOption.textContent = 'Open Modal...';
+  modalOption.addEventListener('click', () => { showModalLinkDialog(box); closeContextMenu(); });
+  contextMenu.appendChild(modalOption);
 
   // Link to Anchor option
   const linkToAnchorOption = document.createElement('div');
@@ -4350,7 +4456,7 @@ function showContextMenu(e, boxId) {
   if (box.type === 'text' || box.type === 'image' || box.type === 'button') {
     const styleOverrideOption = document.createElement('div');
     styleOverrideOption.className = 'context-menu-item';
-    styleOverrideOption.textContent = 'Style Override...';
+    styleOverrideOption.textContent = 'Box Attributes...';
     styleOverrideOption.addEventListener('click', () => {
       openStyleOverridePanel(box);
       contextMenu.remove();
@@ -4486,7 +4592,7 @@ function showRegionContextMenu(e, regionType) {
 
 // @agent:UndoSystem:extension
 function showPageLinkDialog(box) {
-  const pageList = state.pages.map(p => `${p.name} (${p.id})`).join('\n');
+  const pageList = state.pages.filter(p => !p.isModal).map(p => `${p.name} (${p.id})`).join('\n');
   const targetPage = prompt(`Link to page:\n\n${pageList}\n\nEnter page ID:`, box.linkTo?.target || '');
   if (!targetPage) return;
 
@@ -4494,7 +4600,7 @@ function showPageLinkDialog(box) {
   pushHistory(); // Capture state before link creation
 
   const pageId = targetPage;
-  const page = state.pages.find(p => p.id === pageId);
+  const page = state.pages.find(p => p.id === pageId && !p.isModal);
 
   if (page) {
     box.linkTo = { type: 'page', target: pageId };
@@ -4540,10 +4646,14 @@ function showAnchorLinkDialog(box) {
 function handleLinkClick(linkTo) {
   if (!linkTo) return;
 
-  if (linkTo.type === 'page') {
+  if (linkTo.type === 'modal') {
+    showModal(linkTo.target);
+  } else if (linkTo.type === 'page') {
     switchToPage(linkTo.target);
   } else if (linkTo.type === 'anchor') {
-    const targetBox = document.getElementById(linkTo.target);
+    const modal = state.pages.find(p => p.isModal && p.boxes.some(b => b.id === linkTo.target));
+    if (modal) showModal(modal.id);
+    const targetBox = modal ? [...document.querySelectorAll('dialog.qb-modal [data-box-id]')].find(b => b.dataset.boxId === linkTo.target) : document.getElementById(linkTo.target);
     if (targetBox) {
       targetBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
       const box = getCurrentPage().boxes.find(b => b.id === linkTo.target);
@@ -4552,12 +4662,87 @@ function handleLinkClick(linkTo) {
   }
 }
 
+// @agent:ModalManagement:authority
+function createModal() {
+  if (state.currentMode !== 'design') return;
+  const name = prompt('Modal name:', 'Registration');
+  if (!name?.trim()) return;
+  const page = getCurrentPage();
+  const selected = state.tempGroup.length ? state.tempGroup : state.selectedBox ? [state.selectedBox] : [];
+  const boxes = selected.filter(box => page.boxes.includes(box));
+  if (selected.length !== boxes.length) { alert('Select boxes in the main page content to create a modal.'); return; }
+  pushHistory();
+  const left = boxes.length ? Math.min(...boxes.map(b => b.x)) : 0;
+  const top = boxes.length ? Math.min(...boxes.map(b => b.y)) : 0;
+  page.boxes = page.boxes.filter(box => !boxes.includes(box));
+  boxes.forEach(box => { box.x = box.x - left + 20; box.y = box.y - top + 20; });
+  const modal = {id:`page-${++state.pageCounter}`, name:name.trim(), isModal:true, canvasSize:'custom',
+    customWidth:Math.max(500, ...boxes.map(b => b.x + b.width + 20)),
+    customHeight:Math.max(400, ...boxes.map(b => b.y + b.height + 20)), boxes};
+  state.pages.push(modal);
+  state.selectedBox = null; state.tempGroup = [];
+  switchToPage(modal.id);
+  updateNavigator();
+}
+
+function showModalLinkDialog(box) {
+  const modals = state.pages.filter(p => p.isModal);
+  if (!modals.length) { alert('Create a modal first using Create Modal.'); return; }
+  const target = prompt('Open modal:\n\n' + modals.map(p => `${p.name} (${p.id})`).join('\n') + '\n\nEnter modal ID:', modals[0].id);
+  if (target === null) return;
+  if (!modals.some(p => p.id === target)) { alert('Modal not found'); return; }
+  pushHistory(); box.linkTo = {type:'modal', target};
+  renderCurrentPage(); updateNavigator();
+}
+
+function showModal(id) {
+  const modal = state.pages.find(p => p.id === id && p.isModal);
+  if (!modal) return;
+  document.querySelectorAll('dialog.qb-modal').forEach(dialog => dialog.remove());
+  const images = {};
+  modal.boxes.filter(b => b.type === 'image').forEach(b => { images[b.content] = constructImagePath(b.content); });
+  const dialog = document.createElement('dialog');
+  dialog.className = 'qb-modal';
+  dialog.setAttribute('aria-label', modal.name);
+  dialog.innerHTML = modalContentHTML(modal, images);
+  dialog.querySelector('[data-modal-close]').addEventListener('click', () => dialog.close());
+  dialog.addEventListener('click', event => {
+    if (event.target === dialog) { dialog.close(); return; }
+    const linked = event.target.closest('[data-link]');
+    if (linked) { dialog.close(); handleLinkClick(JSON.parse(linked.dataset.link)); }
+    const header = event.target.closest('.accordion-header');
+    if (header) {
+      const body = header.nextElementSibling;
+      const open = body.style.display === 'block';
+      header.closest('.accordion-content').querySelectorAll('.accordion-body').forEach(b => { b.style.display = 'none'; });
+      body.style.display = open ? 'none' : 'block';
+      header.querySelector('.accordion-indicator').textContent = open ? '+' : '−';
+      header.closest('.box').style.height = header.closest('.accordion-content').scrollHeight + 14 + 'px';
+    }
+  });
+  dialog.addEventListener('keydown', event => {
+    if ((event.key === 'Enter' || event.key === ' ') && event.target.matches('[data-link],.accordion-header')) {
+      event.preventDefault(); event.target.click();
+    }
+  });
+  dialog.addEventListener('close', () => dialog.remove());
+  document.body.appendChild(dialog);
+  dialog.showModal();
+}
+
+function modalContentHTML(modal, images) {
+  const escape = QuickBoxDocument.escapeHTML;
+  const height = Math.max(modal.customHeight || 400, regionContentHeight(modal.boxes));
+  return `<div class="qb-modal-heading"><strong>${escape(modal.name)}</strong><button type="button" data-modal-close aria-label="Close modal">×</button></div><div class="qb-modal-content" style="width:${modal.customWidth || 500}px;height:${height}px">${modal.boxes.map(b => generateBoxHTML_export(b, images)).join('')}</div>`;
+}
+
 // @agent:UndoSystem:extension
 // Update Font - applies globally to all elements
 function updateFont() {
   const selectedFont = fontSelect.value;
   console.log(`[Font] Setting global font to: ${selectedFont}`);
 
+  pushHistory();
   // Save to state
   state.globalFont = selectedFont;
 
@@ -4565,7 +4750,7 @@ function updateFont() {
   document.documentElement.style.setProperty('--global-font', selectedFont);
 
   // @agent:UndoSystem:extension
-  pushHistory(); // Save font change to undo history
+
 
   console.log(`[Font] ✓ Global font applied to all elements`);
 }
@@ -4601,11 +4786,12 @@ function setProjectMediaFolder() {
 
   if (path && path.trim()) {
     // Normalize path: replace backslashes with forward slashes
+    pushHistory();
     state.projectMediaPath = path.trim().replace(/\\/g, '/');
     updateMediaPathDisplay();
 
     // @agent:UndoSystem:extension
-    pushHistory(); // Save state with new media path
+
 
     console.log('[Media] Project media path set to:', state.projectMediaPath);
 
@@ -4630,16 +4816,17 @@ function updateMediaPathDisplay() {
 
 // @agent:ImageManagement:extension
 // Construct image source path based on project media folder configuration
-function constructImagePath(filename) {
+function constructImagePath(filename, mediaPath = state.projectMediaPath) {
+  filename = QuickBoxDocument.image(filename);
   // Strip "media/" prefix if present (backward compatibility)
   const cleanFilename = filename.startsWith('media/') ? filename.substring(6) : filename;
 
   console.log('[constructImagePath] filename:', filename, '| cleanFilename:', cleanFilename, '| projectMediaPath:', state.projectMediaPath);
 
-  if (state.projectMediaPath) {
+  if (mediaPath) {
     // Use Vite's /@fs/ prefix to access files outside project root
     // Convert backslashes to forward slashes for URL compatibility
-    const normalizedPath = state.projectMediaPath.replace(/\\/g, '/');
+    const normalizedPath = mediaPath.replace(/\\/g, '/');
     const fullPath = `/@fs/${normalizedPath}/${cleanFilename}`;
     console.log('[constructImagePath] Using external path:', fullPath);
     return fullPath;
@@ -4675,7 +4862,7 @@ function handleImageUpload(e) {
     // Error handling for image load failures
     img.onerror = () => {
       console.error('[Image] Failed to load image:', img.src);
-      content.innerHTML = '<div style="color: red; font-size: 10px; padding: 5px;">Image not found. Check that:<br>1) Media path is set correctly<br>2) Image is within _Active 2024 directory</div>';
+      content.innerHTML = '<div style="color: red; font-size: 10px; padding: 5px;">Image not found. Check that:<br>1) Image is in media/<br>2) External folder is enabled with QUICKBOX_MEDIA_ROOT</div>';
     };
 
     content.appendChild(img);
@@ -4720,6 +4907,8 @@ function recreateCanvasResizeHandles() {
 // @agent:CanvasResize:authority
 // Canvas resize event handlers
 function startCanvasResize(e, direction) {
+  if (state.currentMode !== 'design') return;
+  beginContinuous('canvas-resize');
   e.preventDefault();
   e.stopPropagation();
 
@@ -4776,6 +4965,7 @@ function startCanvasResize(e, direction) {
     const finalHeight = parseInt(canvas.style.height);
 
     setCustomCanvasSize(finalWidth, finalHeight);
+    pushHistory('continuous-end');
 
     console.log('[CANVAS-RESIZE] Resize complete. Final dimensions:', { width: finalWidth, height: finalHeight });
 
@@ -4851,47 +5041,51 @@ function setCustomCanvasSize(width, height) {
 
 // @agent:FileOperations:authority
 // File Operations
-function newFile() {
-  const totalBoxes = state.pages.reduce((sum, page) => sum + page.boxes.length, 0);
-  if (totalBoxes > 0) {
-    if (!confirm('Create new file? Unsaved changes will be lost.')) return;
-  }
-
-  // Reset state
-  canvas.innerHTML = '';
-  state.pages = [];
-  state.selectedBox = null;
-  state.boxCounter = 0;
-  state.pageCounter = 0;
-  state.zIndexCounter = 1;
-
-  // Initialize with default page
-  initializeState();
-  updateNavigator();
+async function newFile() {
+  const request = ++documentLoadRequest;
+  let variables = {};
+  try { variables = paletteVariables(await readPalette('sketch')); } catch {}
+  if (request !== documentLoadRequest) return;
+  if (hasUnsavedChanges() && !confirm('Create new file? Unsaved changes will be lost.')) return;
+  restoreSnapshot({header:{boxes:[], height:80, colorOverride:null}, footer:{boxes:[], height:80, colorOverride:null},
+    pages:[{id:'page-1', name:'Page 1', canvasSize:'desktop', boxes:[]}], currentPageId:'page-1',
+    themes:{active:'sketch', palettes:{}, variables}, globalFont:QuickBoxDocument.fonts[0], projectMediaPath:null});
+  state.clipboard = null;
+  state.currentMode = 'design';
+  updateModeUI();
   renderCurrentPage();
+  resetHistory();
+  savedDocument = documentSignature();
+  documentFileHandle = null;
+  documentFileName = 'quickbox-mockup.json';
 }
 
 // @agent:FileOperations:extension
 async function saveFile() {
-  const data = {
-    version: APP_VERSION,
-    header: state.header,
-    footer: state.footer,
-    pages: state.pages,
-    currentPageId: state.currentPageId,
-    themes: state.themes,
-    projectMediaPath: state.projectMediaPath,
-    globalFont: state.globalFont
-  };
+  if (saveInProgress) return;
+  saveInProgress = true;
+  const request = documentLoadRequest;
+  const data = {version: APP_VERSION, ...captureSnapshot()};
 
   const json = JSON.stringify(data, null, 2);
 
   // Check if File System Access API is supported
   if ('showSaveFilePicker' in window) {
     try {
-      // Show save file picker to let user choose location and filename
-      const handle = await window.showSaveFilePicker({
-        suggestedName: 'quickbox-mockup.json',
+      let handle = documentFileHandle;
+      if (handle) {
+        // Keep both permission requests and Save As tied to the Save click.
+        // Awaiting getFile() first can expire the browser's user activation.
+        if (!confirm(`Save to "${handle.name}"?\n\nOK: save in the original location, replacing the file if it exists.\nCancel: choose a different name or location.`)) handle = null;
+        else if (handle.requestPermission) {
+          const permission = await handle.requestPermission({mode: 'readwrite'});
+          if (permission !== 'granted') throw new Error('Write permission was not granted. Click Save again to retry.');
+        }
+      }
+      if (!handle) handle = await window.showSaveFilePicker({
+        id: 'quickbox-documents',
+        ...(documentFileHandle ? {startIn: documentFileHandle} : {}),
+        suggestedName: documentFileName,
         types: [{
           description: 'JSON Files',
           accept: { 'application/json': ['.json'] }
@@ -4903,6 +5097,11 @@ async function saveFile() {
       await writable.write(json);
       await writable.close();
 
+      if (request === documentLoadRequest) {
+        documentFileHandle = handle;
+        documentFileName = handle.name;
+        savedDocument = documentSignature(data);
+      }
       console.log('File saved successfully');
     } catch (err) {
       // User cancelled the picker or an error occurred
@@ -4918,128 +5117,66 @@ async function saveFile() {
 
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'quickbox-mockup.json';
+    a.download = documentFileName;
     a.click();
+    savedDocument = documentSignature(data);
 
     URL.revokeObjectURL(url);
   }
+  saveInProgress = false;
 }
 
-function openFile(e) {
+async function chooseDocumentFile() {
+  if (!('showOpenFilePicker' in window)) { fileInput.click(); return; }
+  try {
+    const [handle] = await window.showOpenFilePicker({
+      id: 'quickbox-documents',
+      ...(documentFileHandle ? {startIn: documentFileHandle} : {}),
+      multiple: false,
+      types: [{description: 'JSON Files', accept: {'application/json': ['.json']}}]
+    });
+    openFile({target: {files: [await handle.getFile()]}}, handle);
+  } catch (error) {
+    if (error.name !== 'AbortError') alert('Error opening file: ' + error.message);
+  }
+}
+
+function openFile(e, handle = null) {
   const file = e.target.files[0];
+  fileInput.value = '';
   if (!file) return;
-
+  const request = ++documentLoadRequest;
+  if (file.size > 20 * 1024 * 1024) { alert('Document exceeds the 20 MB limit.'); return; }
   const reader = new FileReader();
-  reader.onload = async (event) => {
+  reader.onerror = () => alert('Unable to read the file. Your current document is unchanged.');
+  reader.onload = async event => {
+    if (request !== documentLoadRequest) return;
+    let next;
     try {
-      const data = JSON.parse(event.target.result);
-
-      // Detect and log file version
-      const fileVersion = data.version || detectLegacyVersion(data);
-      console.log(`Loading QuickBox file version: ${fileVersion}`);
-
-      // Clear current state
-      canvas.innerHTML = '';
-      state.pages = [];
-      state.header = { boxes: [], height: 80 };
-      state.footer = { boxes: [], height: 80 };
-      state.selectedBox = null;
-
-      // Check if v0.1 format (backward compatibility)
-      if (data.boxes && Array.isArray(data.boxes)) {
-        // Convert v0.1 to v0.2+ format
-        state.pageCounter = 1;
-        const page = {
-          id: 'page-1',
-          name: 'Page 1',
-          canvasSize: data.canvasSize || 'desktop',
-          boxes: data.boxes
-        };
-        state.pages.push(page);
-        state.currentPageId = 'page-1';
-
-        // Update counters
-        state.boxCounter = Math.max(...data.boxes.map(b => parseInt(b.id.split('-')[1])), 0);
-        state.zIndexCounter = Math.max(...data.boxes.map(b => b.zIndex), 0) + 1;
-      }
-      // v0.2+ format (includes v0.3+ with version field)
-      else if (data.pages && Array.isArray(data.pages)) {
-        state.pages = data.pages;
-        state.currentPageId = data.currentPageId || (data.pages.length > 0 ? data.pages[0].id : null);
-
-        // Load header/footer if present (v0.4+)
-        if (data.header) {
-          state.header = data.header;
-        }
-        if (data.footer) {
-          state.footer = data.footer;
-        }
-
-        // Load themes if present (v1.1+)
-        if (data.themes) {
-          state.themes = data.themes;
-        } else {
-          // Default themes for backward compatibility
-          state.themes = {
-            active: 'sketch',
-            palettes: {}
-          };
-        }
-
-        // Load project media path if present (v1.3+)
-        if (data.projectMediaPath) {
-          state.projectMediaPath = data.projectMediaPath;
-        } else {
-          state.projectMediaPath = null;
-        }
-
-        // Load global font if present (v1.3+)
-        if (data.globalFont) {
-          state.globalFont = data.globalFont;
-        } else {
-          state.globalFont = "'Architects Daughter', cursive";
-        }
-
-        // Update counters
-        const allBoxes = state.pages.flatMap(p => p.boxes);
-        const headerFooterBoxes = [...(state.header.boxes || []), ...(state.footer.boxes || [])];
-        const combinedBoxes = [...allBoxes, ...headerFooterBoxes];
-
-        if (combinedBoxes.length > 0) {
-          state.boxCounter = Math.max(...combinedBoxes.map(b => parseInt(b.id.split('-')[1])), 0);
-          state.zIndexCounter = Math.max(...combinedBoxes.map(b => b.zIndex), 0) + 1;
-        }
-
-        if (state.pages.length > 0) {
-          state.pageCounter = Math.max(...state.pages.map(p => parseInt(p.id.split('-')[1])), 0);
-        }
-      }
-
-      // Render
-      if (!getCurrentPage() && state.pages.length > 0) {
-        state.currentPageId = state.pages[0].id;
-      }
-
-      updateNavigator();
-      renderCurrentPage();
-      updatePageIdentifier();
-      updateMediaPathDisplay();
-
-      // Apply loaded font
-      document.documentElement.style.setProperty('--global-font', state.globalFont);
-      fontSelect.value = state.globalFont;
-
-      // Apply loaded palette
-      if (state.themes?.active) {
-        await applyPalette(state.themes.active);
-        paletteSelector.value = state.themes.active;
-      }
-    } catch (err) {
-      alert('Error opening file: ' + err.message);
+      next = QuickBoxDocument.normalize(JSON.parse(event.target.result));
+    } catch (error) {
+      alert('Error opening file: ' + error.message + '\nYour current document is unchanged.');
+      return;
     }
+    if (!next.themes.variables) {
+      try { next.themes.variables = paletteVariables(await readPalette(next.themes.active)); }
+      catch {
+        next.themes.active = 'sketch';
+        try { next.themes.variables = paletteVariables(await readPalette('sketch')); } catch { next.themes.variables = {}; }
+        alert('The saved palette is unavailable. Sketch has been applied.');
+      }
+    }
+    if (request !== documentLoadRequest) return;
+    if (hasUnsavedChanges() && !confirm('Open this file? Unsaved changes will be lost.')) return;
+    restoreSnapshot(next);
+    state.clipboard = null;
+    resetHistory();
+    paletteSelector.value = state.themes.active;
+    savedDocument = documentSignature();
+    documentFileHandle = handle;
+    documentFileName = file.name;
   };
   reader.readAsText(file);
-  fileInput.value = '';
 }
 
 // Detect legacy file version for backward compatibility
@@ -5088,7 +5225,7 @@ function collectAllImageBoxes() {
 }
 
 
-async function imageToBase64(filename) {
+async function imageToBase64(filename, mediaPath = state.projectMediaPath) {
   const src = constructImagePath(filename);
   try {
     const response = await fetch(src);
@@ -5152,7 +5289,7 @@ body{margin:0;font-family:${v.globalFont};background:#e8e8e8}
   border-bottom:2px dashed #999;background:${v.headerBg};flex-shrink:0}
 .footer-region{position:relative;width:100%;min-height:60px;
   border-top:2px dashed #999;background:${v.footerBg};flex-shrink:0}
-.main-region{position:relative;flex:1;min-height:400px}
+.main-region{position:relative;flex-shrink:0;min-height:400px}
 .box{position:absolute;border:2px solid ${v.textBorder};
   border-radius:4px 6px 5px 7px/5px 7px 6px 4px;
   background:${v.textFill};color:${v.textColor};
@@ -5168,7 +5305,7 @@ body{margin:0;font-family:${v.globalFont};background:#e8e8e8}
 .box-content img{width:100%;height:100%;display:block;object-fit:cover;object-position:center}
 .box.has-link{cursor:pointer}
 .box.has-link::after{content:'🔗';position:absolute;top:4px;right:4px;font-size:12px;pointer-events:none}
-.menu-content{padding:2px;min-height:30px;cursor:default;
+.menu-item-container:hover>.menu-dropdown,.menu-item-container:focus-within>.menu-dropdown{display:block}\n.menu-dropdown .menu-dropdown{top:0;left:100%}\n.anchor-highlight{animation:anchor-flash 1.5s ease-out}\n@keyframes anchor-flash{from{outline:4px solid #2386ff}to{outline:4px solid transparent}}\n.menu-content{padding:2px;min-height:30px;cursor:default;
   display:flex;flex-direction:column;gap:8px;align-items:center;justify-content:space-around}
 .menu-content.horizontal{flex-direction:row}
 .menu-item-container{position:relative;z-index:5}
@@ -5194,209 +5331,122 @@ body{margin:0;font-family:${v.globalFont};background:#e8e8e8}
 }
 
 function generateMenuHTML_export(box) {
-  const dir = box.orientation === 'horizontal' ? ' horizontal' : '';
-  let html = `<div class="menu-content${dir}">`;
-  (box.menuItems || []).forEach(item => {
-    const linkData = item.linkTo ? ` data-link='${JSON.stringify(item.linkTo)}'` : '';
-    html += `<div class="menu-item-container">`;
-    if (item.children && item.children.length > 0) {
-      html += `<div class="menu-item has-children"${linkData}>${item.text} &#9660;</div>`;
-      html += `<div class="menu-dropdown">`;
-      item.children.forEach(child => {
-        const childLink = child.linkTo ? ` data-link='${JSON.stringify(child.linkTo)}'` : '';
-        html += `<div class="child-menu-item${child.linkTo ? ' menu-item-linked' : ''}"${childLink}>${child.text}</div>`;
-      });
-      html += `</div>`;
-    } else {
-      html += `<div class="menu-item${item.linkTo ? ' menu-item-linked' : ''}"${linkData}>${item.text}</div>`;
-    }
-    html += `</div>`;
-  });
-  html += `</div>`;
-  return html;
+  const escape = QuickBoxDocument.escapeHTML;
+  function itemsHTML(items) {
+    return items.map(item => {
+      const linked = item.linkTo ? ' menu-item-linked' : '';
+      const link = item.linkTo ? ` data-link="${escape(JSON.stringify(item.linkTo))}" tabindex="0" role="link"` : '';
+      const children = item.children.length ? `<div class="menu-dropdown">${itemsHTML(item.children)}</div>` : '';
+      return `<div class="menu-item-container"><div class="menu-item${linked}${children ? ' has-children' : ''}"${link}>${escape(item.text)}${children ? ' &#9660;' : ''}</div>${children}</div>`;
+    }).join('');
+  }
+  return `<div class="menu-content${box.orientation === 'horizontal' ? ' horizontal' : ''}">${itemsHTML(box.menuItems || [])}</div>`;
 }
 
 function generateAccordionHTML_export(box) {
-  if (!box.accordionItems || box.accordionItems.length === 0) {
-    return `<div class="accordion-content"><div style="padding:20px;text-align:center;color:#999">No items</div></div>`;
-  }
-  let html = `<div class="accordion-content">`;
-  box.accordionItems.forEach(item => {
-    const bodyDisplay = item.isExpanded ? 'block' : 'none';
-    const indicator = item.isExpanded ? '&minus;' : '+';
-    html += `<div class="accordion-item-container" data-item-id="${item.id}">`;
-    html += `<div class="accordion-header">`;
-    html += `<span class="accordion-indicator">${indicator}</span>`;
-    html += `<span class="accordion-title-text" style="font-size:${box.fontSize}px">${item.title}</span>`;
-    html += `</div>`;
-    html += `<div class="accordion-body" style="display:${bodyDisplay};font-size:${box.fontSize}px">${item.body || ''}</div>`;
-    html += `</div>`;
-  });
-  html += `</div>`;
-  return html;
+  const escape = QuickBoxDocument.escapeHTML;
+  return `<div class="accordion-content">${(box.accordionItems || []).map(item =>
+    `<div class="accordion-item-container"><div class="accordion-header" tabindex="0" role="button"><span class="accordion-indicator">${item.isExpanded ? '&minus;' : '+'}</span><span class="accordion-title-text">${escape(item.title)}</span></div><div class="accordion-body" style="display:${item.isExpanded ? 'block' : 'none'}">${escape(item.body)}</div></div>`
+  ).join('')}</div>`;
 }
 
 function generateBoxHTML_export(box, imageBase64Map) {
-  let boxStyles = `left:${box.x}px;top:${box.y}px;width:${box.width}px;height:${box.height}px;z-index:${box.zIndex};`;
-  let classNames = 'box';
-
-  if (box.type === 'text')      classNames += ' box-text';
-  if (box.type === 'image')     classNames += ' box-image';
-  if (box.type === 'menu')      classNames += ' menu-box';
-  if (box.type === 'button')    classNames += ' button-box';
-  if (box.type === 'accordion') classNames += ' accordion-box';
-
-  if (box.styleOverrides) {
-    if (box.styleOverrides.fill)   boxStyles += `background-color:${box.styleOverrides.fill};`;
-    if (box.styleOverrides.border) boxStyles += `border-color:${box.styleOverrides.border};`;
-  }
-
-  let linkAttr = '';
-  if (box.linkTo) {
-    classNames += ' has-link';
-    linkAttr = ` data-link='${JSON.stringify(box.linkTo)}'`;
-  }
-
-  let contentStyles = `font-size:${box.fontSize || 16}px;`;
+  const escape = QuickBoxDocument.escapeHTML;
+  let styles = `left:${box.x}px;top:${box.y}px;width:${box.width}px;height:${box.height}px;z-index:${box.zIndex};`;
+  const classes = {text:'box-text', image:'box-image', menu:'menu-box', button:'button-box', accordion:'accordion-box'};
+  let classNames = `box ${classes[box.type]}`;
+  if (box.styleOverrides?.fill) styles += `background-color:${box.styleOverrides.fill};`;
+  if (box.styleOverrides?.border) styles += `border-color:${box.styleOverrides.border};`;
+  const link = box.linkTo ? ` data-link="${escape(JSON.stringify(box.linkTo))}" tabindex="0" role="link"` : '';
+  if (link) classNames += ' has-link';
+  let contentStyles = `font-size:${box.fontSize}px;`;
   if (box.styleOverrides?.textColor) contentStyles += `color:${box.styleOverrides.textColor};`;
-
-  let contentHTML = '';
-  if (box.type === 'text') {
-    contentHTML = box.content || '';
-  } else if (box.type === 'button') {
-    contentStyles += 'display:flex;align-items:center;justify-content:center;';
-    contentHTML = box.content || '';
+  let content = '';
+  if (box.type === 'text' || box.type === 'button') {
+    content = QuickBoxDocument.richHTML(box.content);
+    if (box.type === 'button') contentStyles += 'display:flex;align-items:center;justify-content:center;';
   } else if (box.type === 'image') {
-    const b64 = box.content && imageBase64Map[box.content];
-    contentHTML = b64
-      ? `<img src="${b64}" alt="">`
-      : `<div class="img-placeholder">${box.content ? box.content + '<br>' : ''}(image not available)</div>`;
+    const image = imageBase64Map[box.content];
+    content = image ? `<img src="${escape(image)}" alt="">` : `<div class="img-placeholder">${escape(box.content)}<br>(image not available)</div>`;
   } else if (box.type === 'menu') {
-    contentStyles += 'padding:0;';
-    contentHTML = generateMenuHTML_export(box);
+    contentStyles += 'padding:0;overflow:visible;';
+    content = generateMenuHTML_export(box);
   } else if (box.type === 'accordion') {
     contentStyles += 'padding:0;overflow:hidden;';
-    boxStyles += `height:${exportBoxHeight(box)}px;`;
-    contentHTML = generateAccordionHTML_export(box);
+    content = generateAccordionHTML_export(box);
   }
-
-  return `<div class="${classNames}" style="${boxStyles}"${linkAttr}><div class="box-content" style="${contentStyles}">${contentHTML}</div></div>`;
-}
-
-function exportBoxHeight(box) {
-  const el = document.getElementById(box.id);
-  return el ? el.offsetHeight : box.height;
+  return `<div class="${classNames}" data-box-id="${escape(box.id)}" style="${styles}"${link}><div class="box-content" style="${contentStyles}">${content}</div></div>`;
 }
 
 function regionContentHeight(boxes) {
-  if (!boxes.length) return 0;
-  return Math.max(...boxes.map(b => b.y + exportBoxHeight(b))) + 20;
+  return boxes.length ? Math.max(...boxes.map(box => box.y + box.height)) + 20 : 0;
 }
 
-function generateRegionHTML_export(boxes, regionClass, fixedHeight, colorOverride, imageBase64Map) {
-  const contentH = regionContentHeight(boxes);
-  const h = fixedHeight ? Math.max(fixedHeight, contentH) : Math.max(contentH, 60);
-  let style = `height:${h}px;`;
-  if (colorOverride) style += `background-color:${colorOverride};`;
-  const boxesHTML = boxes.map(b => generateBoxHTML_export(b, imageBase64Map)).join('');
-  return `<div class="${regionClass}" style="${style}">${boxesHTML}</div>`;
+function generateRegionHTML_export(boxes, regionClass, minimum, colorOverride, imageBase64Map) {
+  const height = Math.max(minimum, regionContentHeight(boxes));
+  const color = colorOverride ? `background-color:${colorOverride};` : '';
+  return `<div class="${regionClass}" data-min-height="${minimum}" style="height:${height}px;${color}">${boxes.map(box => generateBoxHTML_export(box, imageBase64Map)).join('')}</div>`;
 }
 
-async function generateExportHTML(imageBase64Map) {
+async function generateExportHTML(imageBase64Map, source = captureSnapshot()) {
+  const doc = QuickBoxDocument.normalize(source);
+  const escape = QuickBoxDocument.escapeHTML;
   const vars = getCurrentPaletteVars();
-  const css = getExportCSS(vars);
-  const canvasWidths = { desktop: 1200, tablet: 768, mobile: 375 };
-
-  const navBtns = state.pages.map((page, i) =>
-    `<button class="export-nav-btn${i === 0 ? ' active' : ''}" onclick="showPage('${page.id}')" data-page="${page.id}">${page.name}</button>`
-  ).join('');
-
-  const pagesHTML = state.pages.map((page, i) => {
-    const width = page.customWidth || canvasWidths[page.canvasSize || 'desktop'] || 1200;
-    const headerH = Math.max(state.header.height || 80, regionContentHeight(state.header.boxes));
-    const mainH   = Math.max(page.customHeight || 400, regionContentHeight(page.boxes));
-    const footerH = Math.max(state.footer.height || 80, regionContentHeight(state.footer.boxes));
-    const totalH  = headerH + mainH + footerH;
-    const headerHTML = generateRegionHTML_export(state.header.boxes, 'header-region', headerH, state.header.colorOverride, imageBase64Map);
-    const mainHTML   = generateRegionHTML_export(page.boxes, 'main-region', mainH, null, imageBase64Map);
-    const footerHTML = generateRegionHTML_export(state.footer.boxes, 'footer-region', footerH, state.footer.colorOverride, imageBase64Map);
-    return `<div class="page-wrapper${i === 0 ? ' visible' : ''}" id="page-${page.id}">\n<div class="export-canvas" style="width:${width}px;height:${totalH}px;">${headerHTML}${mainHTML}${footerHTML}</div>\n</div>`;
-  }).join('\n');
-
-  const script = `
-function showPage(pageId){
-  document.querySelectorAll('.page-wrapper').forEach(function(p){p.classList.remove('visible')});
-  document.querySelectorAll('.export-nav-btn').forEach(function(b){b.classList.remove('active')});
-  var w=document.getElementById('page-'+pageId);if(w)w.classList.add('visible');
-  var b=document.querySelector('[data-page="'+pageId+'"]');if(b)b.classList.add('active');
-}
-document.addEventListener('DOMContentLoaded',function(){
-  document.querySelectorAll('.has-link').forEach(function(el){
-    el.addEventListener('click',function(){
-      try{var l=JSON.parse(el.dataset.link||'null');if(!l)return;
-        if(l.type==='page')showPage(l.pageId);}catch(e){}
-    });
-  });
-  document.querySelectorAll('.menu-item-linked,.child-menu-item.menu-item-linked').forEach(function(el){
-    el.addEventListener('click',function(e){
-      e.stopPropagation();
-      try{var l=JSON.parse(el.dataset.link||'null');if(l&&l.type==='page')showPage(l.pageId);}catch(e2){}
-    });
-  });
-  document.querySelectorAll('.menu-item.has-children').forEach(function(item){
-    var dd=item.parentElement.querySelector('.menu-dropdown');if(!dd)return;
-    item.addEventListener('mouseenter',function(){dd.style.display='block'});
-    item.addEventListener('mouseleave',function(){setTimeout(function(){if(!dd.matches(':hover'))dd.style.display='none'},200)});
-    dd.addEventListener('mouseleave',function(){dd.style.display='none'});
-  });
-  document.querySelectorAll('.accordion-header').forEach(function(hdr){
-    hdr.addEventListener('click',function(){
-      var body=hdr.nextElementSibling;
-      var open=body.style.display==='block';
-      var ac=hdr.closest('.accordion-content');
-      ac.querySelectorAll('.accordion-body').forEach(function(b){b.style.display='none'});
-      ac.querySelectorAll('.accordion-indicator').forEach(function(ind){ind.textContent='+'});
-      if(!open){body.style.display='block';hdr.querySelector('.accordion-indicator').textContent='−';}
-    });
-  });
-});`;
-
+  vars.globalFont = doc.globalFont;
+  for (const [key, value] of Object.entries(doc.themes.variables || {})) {
+    const mapping = {'--canvas-bg':'canvasBg', '--header-bg':'headerBg', '--footer-bg':'footerBg'};
+    const match = key.match(/^--(text|image|menu|button|accordion)-(fill|border|color)$/);
+    vars[mapping[key] || (match && match[1] + ({fill:'Fill', border:'Border', color:'Color'}[match[2]]))] = value;
+  }
+  const css = getExportCSS(vars) + getModalCSS();
+  const regularPages = doc.pages.filter(p => !p.isModal);
+  const modals = doc.pages.filter(p => p.isModal).map(modal => `<dialog class="qb-modal" data-modal-id="${escape(modal.id)}" aria-label="${escape(modal.name)}">${modalContentHTML(modal, imageBase64Map)}</dialog>`).join('');
+  const nav = regularPages.map((page, i) => `<button class="export-nav-btn${i === 0 ? ' active' : ''}" data-page="${escape(page.id)}">${escape(page.name)}</button>`).join('');
+  const pages = regularPages.map((page, i) => {
+    const width = page.customWidth || CANVAS_PRESET_SIZES[page.canvasSize] || 1200;
+    const headerH = doc.header.height, footerH = doc.footer.height;
+    const mainH = Math.max(400, (page.customHeight || 0) - headerH - footerH);
+    const regions = generateRegionHTML_export(doc.header.boxes, 'header-region', headerH, doc.header.colorOverride, imageBase64Map)
+      + generateRegionHTML_export(page.boxes, 'main-region', mainH, null, imageBase64Map)
+      + generateRegionHTML_export(doc.footer.boxes, 'footer-region', footerH, doc.footer.colorOverride, imageBase64Map);
+    return `<div class="page-wrapper${i === 0 ? ' visible' : ''}" data-page-id="${escape(page.id)}"><div class="export-canvas" style="width:${width}px">${regions}</div></div>`;
+  }).join('');
   return `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>QuickBox Export</title>
-<link href="https://fonts.googleapis.com/css2?family=Architects+Daughter&family=Roboto:wght@400;700&display=swap" rel="stylesheet">
-<style>${css}</style>
-</head>
-<body>
-<div id="export-nav"><span>QuickBox</span>${navBtns}</div>
-${pagesHTML}
-<script>${script}<\/script>
-</body>
-</html>`;
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>QuickBox Export</title>
+<link href="https://fonts.googleapis.com/css2?family=Architects+Daughter&family=Roboto:wght@400;700&display=swap" rel="stylesheet"><style>${css}</style></head>
+<body><div id="export-nav"><span>QuickBox</span>${nav}</div>${pages}${modals}<script>(${initializeQuickBoxExport.toString()})();<\/script></body></html>`;
+}
+
+function getModalCSS() {
+  return `.qb-modal{padding:16px;border:2px solid #333;background:#fff;color:#333;max-width:calc(100vw - 48px);max-height:calc(100vh - 48px);overflow:auto}.qb-modal::backdrop{background:rgba(0,0,0,.5)}.qb-modal-heading{display:flex;justify-content:space-between;align-items:center;gap:20px;margin-bottom:16px}.qb-modal-heading button{font:inherit;cursor:pointer;padding:4px 12px}.qb-modal-content{position:relative;min-height:100px}.qb-modal .box{position:absolute}.qb-modal .accordion-content{height:auto}`;
 }
 
 async function startHtmlExport() {
-  const imagePaths = collectAllImageBoxes();
   exportHtmlBtn.textContent = 'Exporting...';
   exportHtmlBtn.disabled = true;
-
-  const imageBase64Map = {};
-  for (const filename of imagePaths) {
-    imageBase64Map[filename] = await imageToBase64(filename);
+  let url;
+  try {
+    const source = captureSnapshot();
+    QuickBoxDocument.normalize(source); // Fail before fetching assets.
+    const paths = [...new Set([...source.header.boxes, ...source.footer.boxes, ...source.pages.flatMap(p => p.boxes)].filter(b => b.type === 'image' && b.content).map(b => b.content))];
+    const images = Object.create(null);
+    const missing = [];
+    for (const filename of paths) {
+      images[filename] = await imageToBase64(filename, source.projectMediaPath);
+      if (!images[filename]) missing.push(filename);
+    }
+    if (missing.length && !confirm('These images could not be embedded:\n' + missing.join('\n') + '\n\nExport with placeholders?')) return;
+    const html = await generateExportHTML(images, source);
+    url = URL.createObjectURL(new Blob([html], {type:'text/html'}));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'quickbox-export.html';
+    a.click();
+  } catch (error) {
+    alert('Unable to export: ' + error.message);
+  } finally {
+    if (url) setTimeout(() => URL.revokeObjectURL(url), 1000);
+    exportHtmlBtn.textContent = 'Export HTML';
+    exportHtmlBtn.disabled = false;
   }
-
-  const html = await generateExportHTML(imageBase64Map);
-  const blob = new Blob([html], { type: 'text/html' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'quickbox-export.html';
-  a.click();
-  URL.revokeObjectURL(url);
-
-  exportHtmlBtn.textContent = 'Export HTML';
-  exportHtmlBtn.disabled = false;
 }

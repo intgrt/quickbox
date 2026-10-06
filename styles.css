@@ -124,14 +124,45 @@ label {
 }
 
 /* @agent:Navigator:authority */
+.qb-modal { padding: 16px; border: 2px solid #333; background: var(--canvas-bg, #fff); color: #333; max-width: calc(100vw - 48px); max-height: calc(100vh - 48px); overflow: auto; }
+.qb-modal::backdrop { background: rgba(0, 0, 0, .5); }
+.qb-modal-heading { display: flex; justify-content: space-between; align-items: center; gap: 20px; margin-bottom: 16px; }
+.qb-modal-content { position: relative; min-height: 100px; }
+.qb-modal .box { position: absolute; }
+.qb-modal .accordion-content { height: auto; }
+#canvas[data-modal="true"] .header-region,
+#canvas[data-modal="true"] .footer-region { display: none; }
+#canvas[data-modal="true"] .main-region { top: 0; }
+
 /* Navigator Panel */
 #navigatorPanel {
   width: 220px;
+  flex-shrink: 0;
   background: #fff;
   border-right: 2px solid #ccc;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
+}
+
+#toggleNavigatorBtn {
+  align-self: flex-end;
+  margin: 4px;
+  padding: 4px 8px;
+}
+
+#navigatorContents {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+#navigatorPanel.collapsed {
+  width: 42px;
+}
+
+#navigatorPanel.collapsed #navigatorContents {
+  display: none;
 }
 
 .nav-section {
@@ -220,8 +251,9 @@ label {
 /* Canvas Container */
 #canvasContainer {
   flex: 1;
+  min-width: 0;
   display: flex;
-  justify-content: center;
+  justify-content: flex-start;
   align-items: flex-start;
   padding: 10px;
   overflow: auto;
@@ -230,6 +262,8 @@ label {
 
 #canvas {
   position: relative;
+  flex-shrink: 0;
+  margin-inline: auto;
   width: 1200px;
   min-height: 600px;
   background: var(--canvas-bg, #fff);
@@ -1470,21 +1504,6 @@ label {
   padding-top: 15px;
   border-top: 2px solid #ddd;
   margin-top: 10px;
-}
-
-/* Visual indicator for boxes with active overrides */
-.box.has-style-override::after {
-  content: '🎨';
-  position: absolute;
-  top: 2px;
-  right: 2px;
-  font-size: 16px;
-  background: rgba(255, 255, 255, 0.9);
-  border: 1px solid #333;
-  border-radius: 3px;
-  padding: 2px 4px;
-  pointer-events: none;
-  z-index: 10;
 }
 
 /* @agent:StyleOverrides:authority */

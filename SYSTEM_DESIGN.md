@@ -1,7 +1,7 @@
 # QuickBox System Design & Architecture
-**Version:** 1.3
-**Last Updated:** 2026-03-01
-**Code References Last Verified:** 2026-03-01
+**Version:** 1.3.1
+**Last Updated:** 2026-10-05
+**Code References Last Verified:** 2026-10-05 (markers; use search rather than historical line numbers)
 **Purpose:** Comprehensive system design document for implementing features and understanding codebase structure
 
 ---
@@ -18,18 +18,12 @@
 
 ### Running QuickBox
 
-**Direct Browser (no setup):**
+**Supported local editor workflow (Node.js 18+):**
 ```bash
-# Just open the file
-open index.html
-```
-
-**Development Server (optional):**
-```bash
-npm install
 npm run dev
-# Access at http://localhost:5174
+# http://127.0.0.1:5174
 ```
+No dependency installation is needed for this built-in Node server. `npm ci` installs jsdom for `npm run check`; those checks supplement manual Chrome layout and interaction checks. Direct-file editor use is unsupported because palettes use fetch. Exported previews can open directly.
 
 ### Finding Code with ANM Markers
 
@@ -73,7 +67,7 @@ Search for markers to locate functionality:
 **For user-facing features and quick start guide, see [README.md](README.md)**
 
 **Key Characteristics:**
-- Single-file application (index.html + app.js + styles.css)
+- Static application (HTML, CSS, and editor/validation/export scripts)
 - Vanilla JavaScript (no frameworks)
 - HTML5 Canvas-like rendering with DOM elements
 - JSON-based file format with version compatibility
@@ -192,22 +186,22 @@ Every box (regardless of type) has this structure:
   zIndex: 1,                // Stacking order (higher = on top)
 
   // Type-specific properties
-  text: 'Enter text here',  // For text boxes
+  content: 'Enter text here', // Sanitized rich HTML for text/button boxes
   fontSize: 16,             // Font size in pixels
   fontFamily: "'Architects Daughter', cursive",
 
   content: 'media/logo.png', // For image boxes - relative path to /media folder
 
-  link: null,               // Link target: { type: 'page', pageId: '...' } or { type: 'anchor', text: '...' }
+  linkTo: null,             // { type: 'page'|'anchor', target: 'page-2'|'box-3' }
 
   // Menu-specific
   menuItems: [              // For menu boxes
-    { id: 'm1', text: 'Item 1', children: [] }
+    { id: 'm1', text: 'Item 1', linkTo: null, children: [] }
   ],
 
   // Accordion-specific
   accordionItems: [         // For accordion boxes
-    { id: 'a1', title: 'Section 1', content: 'Text here' }
+    { id: 'a1', title: 'Section 1', body: 'Text here', isExpanded: false }
   ]
 }
 ```
@@ -219,11 +213,11 @@ const undoHistory = {
   past: [],                 // Array of state snapshots (max 20)
   future: [],               // Array for redo
   continuousOp: null,       // Current continuous operation type or null
-  coalesceTimer: null       // Timer for debouncing
+  continuousSnapshot: null // State captured when a gesture starts
 };
 ```
 
-**Continuous Operations:** `drag`, `resize`, `region-resize` are coalesced into single undo steps with 500ms debounce.
+**Continuous Operations:** drag, resize, region resize, and canvas resize capture a start snapshot and commit once on mouseup when changed. No debounce timer reorders history.
 
 ---
 
@@ -234,24 +228,13 @@ const undoHistory = {
 1. **App starts** → `initializeState()` called
 2. If no pages exist, creates default "Page 1" (desktop size)
 3. Sets `currentPageId` to 'page-1'
-4. Initial state snapshot captured to undo history
+4. Undo history starts empty; the initial document becomes the saved baseline
 
 ### State Mutations
 
-State changes follow this pattern:
+Discrete changes call `pushHistory()` immediately before mutating document state, then update the UI. Text captures state on focus, updates sanitized content on input, and records one edit on blur. Continuous gestures call `beginContinuous()` before movement and `pushHistory('continuous-end')` on completion. Menu and accordion editors edit clones; Save commits one action and Close discards the draft. Color previews capture their original snapshot; Apply commits once and Cancel restores it.
 
-```javascript
-// 1. Modify state object
-state.selectedBox = boxId;
-
-// 2. Re-render affected UI
-renderCurrentPage();      // Re-render canvas
-updateNavigator();        // Update pages/elements list
-updatePageIdentifier();   // Update current page display
-
-// 3. Record to undo history
-pushHistory('discrete');  // or 'continuous-end' for continuous ops
-```
+Snapshots include pages, regions, active page, font, theme variables, and media path. Selection, counters, modes, and clipboard are transient. Restoration recalculates counters and reapplies CSS variables synchronously.
 
 ### Page Switching
 
@@ -271,7 +254,7 @@ When user clicks a page in Navigator:
 
 ### Layout Components
 
-**Toolbar** (index.html lines 14-76):
+**Toolbar** (index.html):
 - File operations: New, Open, Save
 - Box creation buttons: Text, Image, Menu, Button, Accordion
 - Group operations: Create Group, Delete
@@ -279,11 +262,12 @@ When user clicks a page in Navigator:
 - Canvas size buttons (Desktop, Tablet, Mobile)
 - Mode buttons (Design 🖊️, Navigate 🧭)
 
-**Navigator Panel** (index.html lines 82-96):
+**Navigator Panel** (index.html):
+- The arrow button collapses the panel to a narrow rail and restores it. A CSS class controls width and content visibility; the button updates its accessible label and expanded state. This is transient UI state, separate from the saved mockup and undo history.
 - **Pages Section:** Lists all pages, + button to add new page
 - **Elements Section:** Lists boxes on current page
 
-**Canvas** (index.html lines 101-109):
+**Canvas** (index.html):
 - Main rendering area where boxes are displayed
 - Resize handles for canvas dimensions
 - Regions: header, main, footer (dynamically positioned)
@@ -498,7 +482,7 @@ Undo History Recorded
 2. **Anchor Link:** Jump to element on same page
 
 **Link Storage:**
-- Stored in `box.link` property: `{ type: 'page', pageId: '...' }` or `{ type: 'anchor', text: '...' }`
+- Stored in `box.linkTo`: `{ type: 'page', target: 'page-2' }` or `{ type: 'anchor', target: 'box-3' }`
 - Context menu → "Link to Page" or "Link to Anchor"
 
 **Navigate Mode Behavior:**
@@ -575,9 +559,9 @@ Colors applied via CSS custom properties:
 
 **LLM Workflow:**
 1. LLM analyzes website/design
-2. Creates new palette JSON file in `/palettes/` folder
-3. Updates `palettes/index.json` manifest
-4. User refreshes palette list or restarts app
+2. Stores the palette in browser localStorage and downloads JSON for distribution
+3. Updates the browser palette manifest
+4. Applies the palette; distributed files and palettes/index.json are maintained manually
 5. New palette appears in dropdown
 
 ### 8. Global Font Control (v1.1)
@@ -613,7 +597,7 @@ CSS variable in `.box-content`:
 - Users can edit existing palettes, create new palettes, and delete custom palettes
 - Provides visual color pickers for all element types and backgrounds
 - Live preview with Apply/Undo functionality
-- Save As creates new palette files in `/palettes/` folder
+- Save As stores a browser palette and downloads JSON for distribution
 
 **UI Location:**
 - Toolbar: Palette dropdown, ✏️ Edit button, 🗑️ Delete button
@@ -623,35 +607,35 @@ CSS variable in `.box-content`:
 1. User selects palette from dropdown
 2. Clicks ✏️ Edit button → Palette Editor Panel opens
 3. Adjusts colors using color pickers with live preview
-4. Click "Apply" → Changes visible immediately (temporary)
+4. Click "Apply" → Commits the colors as one undoable document edit
 5. Click "Undo" → Reverts to original palette
 6. Click "Save As New Palette" → Prompts for name, creates new JSON file
-7. Click "Cancel" → Reverts and closes panel
+7. Click "Cancel" → Closes the panel; committed Apply changes remain
 
 **Data Flow:**
 - Editor reads current palette from CSS variables
-- Apply button updates CSS variables temporarily (no file write)
+- Apply updates CSS variables and saved theme variables, recording history
 - Save As button:
   - Prompts for palette name
-  - Creates new JSON file in `/palettes/` folder
-  - Updates `palettes/index.json` manifest
+  - Downloads JSON and stores the palette definition in localStorage
+  - Updates the browser manifest
   - Applies new palette as active
 
 **Delete Palette:**
 - Available for custom palettes only (not built-in "Sketch")
-- Deletes palette JSON file
-- Removes entry from `palettes/index.json` manifest
+- Removes the browser palette definition and manifest entry
+- Distributed palette files remain user-managed
 - Reverts to "Sketch" palette if deleted palette was active
 
 **Key Functions:**
-- `editCurrentPalette()` - Opens editor with current palette colors
+- `openPaletteEditor()` - Opens editor with current palette colors
 - `applyPalettePreview()` - Updates CSS variables for live preview
 - `undoPalettePreview()` - Reverts to original palette
 - `savePaletteAs()` - Creates new palette file and updates manifest
-- `deleteCurrentPalette()` - Removes custom palette
+- `deletePalette()` - Removes custom palette
 
 **File Locations:**
-- HTML: index.html lines 156-302 (Palette Editor Panel)
+- HTML: index.html (Palette Editor Panel)
 - CSS: styles.css (palette editor styles)
 - JavaScript: app.js (palette editor functions)
 
@@ -707,10 +691,10 @@ box.styleOverrides = {
 - `resetToDefaultPalette()` - Removes all overrides
 
 **File Locations:**
-- HTML: index.html lines 304-369 (Style Override Panel)
-- CSS: styles.css lines 1251-1466 (panel styles, 🎨 indicator)
-- JavaScript: app.js lines 2349-2616 (override panel management)
-- Rendering: app.js lines 1306-1341, 1357-1361 (apply overrides to box elements)
+- HTML: index.html (Style Override Panel)
+- CSS: styles.css (panel styles, 🎨 indicator)
+- JavaScript: app.js (override panel management)
+- Rendering: app.js (apply overrides to box elements)
 
 ### 11. Header/Footer Region Background Color Overrides (v1.2)
 
@@ -764,11 +748,11 @@ state.footer.colorOverride = "#e0e0e0";  // Optional: override footer background
 - `resetRegionToDefaultPalette()` - Removes override
 
 **File Locations:**
-- HTML: index.html lines 371-397 (Region Color Panel)
-- CSS: styles.css lines 1468-1548 (region panel styles)
-- JavaScript: app.js lines 2618-2723 (region color override functions)
-- Context Menu: app.js lines 1036-1069, 3901-3947 (region detection and menu)
-- Rendering: app.js lines 3597-3600, 3614-3617 (apply background color)
+- HTML: index.html (Region Color Panel)
+- CSS: styles.css (region panel styles)
+- JavaScript: app.js (region color override functions)
+- Context Menu: app.js (region detection and menu)
+- Rendering: app.js (apply background color)
 
 ### 12. HTML Export (v1.3)
 
@@ -783,7 +767,7 @@ state.footer.colorOverride = "#e0e0e0";  // Optional: override footer background
 2. Button shows "Exporting..." while processing
 3. Each unique image is fetched and converted to a base64 data URI
 4. CSS variables are read from the live document to capture the active palette as concrete hex values
-5. Each region's required height is measured from live DOM elements (`offsetHeight`) so accordion and other dynamic box heights are captured accurately
+5. Saved geometry sets region minimum heights; the export runtime measures accordion contents on display and expansion
 6. A single HTML file is generated and downloaded as `quickbox-export.html`
 
 **Output Structure:**
@@ -793,20 +777,20 @@ state.footer.colorOverride = "#e0e0e0";  // Optional: override footer background
 - Inline `<script>` handling page switching, menu hover dropdowns, accordion toggle, and page link navigation
 
 **Image Handling:**
-- Images are fetched via the configured `/@fs/` media path (requires Vite dev server)
+- Images are fetched via the configured `/@fs/` media path (requires the local server with QUICKBOX_MEDIA_ROOT enabled)
 - Missing or inaccessible images show a placeholder div rather than breaking the layout
 - Images are embedded as data URIs — the exported file has no dependency on the media folder
 
 **Canvas Sizing:**
 - Canvas width taken from `page.canvasSize` or `page.customWidth`
-- Region heights calculated from `offsetHeight` of live DOM box elements, ensuring the exported canvas matches what is visible in QuickBox
+- Region heights use box extents and are updated after page changes, font loading, and accordion expansion
 
 **Key Functions:**
 - `@agent:HTMLExport:authority` — `startHtmlExport()`, `generateExportHTML()`, `generateBoxHTML_export()`
 - `collectAllImageBoxes()` — scans all regions and pages for unique image filenames
 - `imageToBase64()` — fetches image and returns data URI
 - `getCurrentPaletteVars()` — reads live CSS variable values for palette baking
-- `exportBoxHeight()` — reads `offsetHeight` from live DOM for accurate region sizing
+- `initializeQuickBoxExport()` — installs scoped navigation and measures accordion/region heights
 - `regionContentHeight()` — calculates required region height from box extents
 
 ---
@@ -881,7 +865,7 @@ These modify canvas dimensions via drag, not box dimensions.
 
 ```json
 {
-  "version": "1.2",
+  "version": "1.3.1",
   "header": {
     "boxes": [
       {
@@ -896,7 +880,7 @@ These modify canvas dimensions via drag, not box dimensions.
         "text": "Logo",
         "fontSize": 20,
         "fontFamily": "'Architects Daughter', cursive",
-        "link": null,
+        "linkTo": null,
         "styleOverrides": {
           "fill": "#ff5733",
           "border": "#000000",
@@ -937,8 +921,8 @@ These modify canvas dimensions via drag, not box dimensions.
 - **v1.0 files:** Fully compatible - `themes` object added on load with default value
 - **v0.12.x files with base64 images:** Will load but images stored as base64 strings may not render correctly
 - **v0.7+ files (non-image boxes):** Fully compatible
-- **v0.6 and earlier:** Not compatible (due to header/footer structure changes)
-- **Version checks:** File version compared on load to warn about incompatibility
+- **Legacy documents:** Older page/region documents and the original single `boxes` array are accepted when their structure validates
+- **Version checks:** Malformed version identifiers and future major versions are rejected; supported legacy shapes are normalized
 
 **Breaking Changes:**
 - **v1.0:** Image storage changed from base64 to relative file paths
@@ -948,6 +932,7 @@ These modify canvas dimensions via drag, not box dimensions.
 ### Save/Load Process
 
 **Save:**
+- File System Access handles are kept as transient session state after successful Open/Save. Save offers replacement at the remembered location or a picker for another name/location, with `startIn` set to the remembered handle. Write permission is requested directly from the Save click before asynchronous file operations; the chosen file is created if missing. New clears it; invalid/cancelled Open preserves it. The fallback download cannot access the source directory.
 - User clicks Save button
 - File picker opens (folder selection)
 - State object converted to JSON
@@ -956,16 +941,22 @@ These modify canvas dimensions via drag, not box dimensions.
 **Open:**
 - User clicks Open button
 - File picker filters for `.json` files
-- File parsed and validated
+- `QuickBoxDocument.normalize()` validates and sanitizes a candidate document before replacement. Palette loading also finishes before replacement.
 - Counters recalculated from max IDs
 - State restored and UI re-rendered
-- Active palette reapplied via `applyPalette(state.themes.active)` — restores all CSS variables
+- Saved `themes.variables` are reapplied directly. Legacy documents resolve their named palette, falling back to Sketch when unavailable.
 - Global font reapplied via `--global-font` CSS variable
-- Undo history cleared
+- Undo/redo, gestures, editor drafts, selections, and clipboard are cleared
 
 ---
 
 ## Mode System
+
+### Modals
+
+Modal containers reuse page geometry and box editing with `pages[].isModal: true`. They appear in the editor navigator, omit shared regions, and are excluded from exported page navigation. At least one regular page is required. `linkTo: {type: 'modal', target: 'page-N'}` opens the referenced modal. Normalization validates modal targets independently from page and anchor targets, while snapshots preserve modal definitions for save and undo.
+
+Create Modal transfers selected main-content boxes into a new modal, preserving IDs and relative placement with padding. With no selection it creates an empty container. `showModal()` generates a native dialog for editor preview; HTML export renders the same modal content into native dialogs handled by `initializeQuickBoxExport`. Dialogs provide background isolation, keyboard focus containment, and Escape; explicit Close/backdrop actions dismiss them. Modal opening is transient and is not saved. New/Open/Undo and mode changes remove preview dialogs.
 
 ### Design Mode
 - **Visual Indicator:** Pencil emoji (✏️) button active
@@ -1059,18 +1050,9 @@ const boxInBounds =
   boxY <= rectBottom && boxY + boxHeight >= rectTop;
 ```
 
-### Undo/Redo with Coalescing
+### Undo/Redo with Gesture Grouping
 
-**Discrete operations** (add box, delete box):
-- Immediately push to undo history
-
-**Continuous operations** (drag, resize):
-1. Set `undoHistory.continuousOp = 'drag'`
-2. Skip intermediate snapshots
-3. On mouse up, record single snapshot after 500ms debounce
-4. Clear `continuousOp` flag
-
-**Result:** Entire drag operation becomes one undo step.
+The history stores document state before committed changes, with a maximum of 20 entries. Each completed gesture records its start state once if changed. Undo skips unchanged checkpoints, and a new committed action clears Redo. New/Open reset history so it cannot cross document boundaries. Fonts and applied palette variables are part of document state.
 
 ### Z-Index Management
 
@@ -1083,14 +1065,11 @@ const boxInBounds =
 
 ## Code Organization & File Locations
 
-### index.html
-- **Lines 1-13:** Document header, stylesheet links
-- **Lines 14-76:** Toolbar layout with all controls
-- **Lines 82-96:** Navigator panel (pages & elements)
-- **Lines 101-109:** Canvas and resize handles
-- **Lines 115-128:** Menu editor panel (hidden)
-- **Lines 132-144:** Accordion editor panel (hidden)
-- **Lines 147-150:** Hidden file inputs
+### index.html and supporting scripts
+- `index.html`: toolbar, navigator, canvas, and editor panels.
+- `document-model.js`: `@agent:DocumentValidation:authority` validates IDs, types, dimensions, colors, links, media references, and bounded array sizes; sanitizes rich HTML with a formatting allowlist.
+- `export-runtime.js`: `@agent:HTMLExportRuntime:authority` handles scoped page/anchor navigation, nested menus, accordion toggles, and region resizing in client exports.
+- `dev-server.cjs`: localhost-only static asset server; rejects repository files, traversal, and symlinks outside allowed asset roots. External media requires `QUICKBOX_MEDIA_ROOT`.
 
 ### app.js (Key Sections)
 
@@ -1122,19 +1101,15 @@ Use ANM markers to locate functionality. Search for `// @agent:ComponentName:aut
 - `@agent:PageRendering:authority` — Page rendering pipeline
 
 ### styles.css (Key Sections)
-- **Lines 1-4:** Global box-sizing
-- **Lines 6-10:** Body styles (font, background)
-- **Lines 12-16:** App flex layout
-- **Lines 18-78:** Toolbar styles (buttons, selects, branding)
-- **Lines 111-150:** Navigator panel and page/element listing
-- **Lines 150+:** Canvas and box styles, resize handles, selection indicators
+
+Search the CSS agent markers and selectors for global styles, toolbar, navigator, canvas, boxes, resize handles, selections, and editor panels. Historical line numbers are not maintained.
 
 ---
 
 ## Design Philosophy & Constraints
 
 ### Minimalism
-- Single-file HTML application
+- Static HTML application with separate JavaScript and CSS files
 - Vanilla JavaScript (no frameworks)
 - No build process required
 - Hand-drawn Balsamiq aesthetic
@@ -1146,9 +1121,9 @@ Use ANM markers to locate functionality. Search for `// @agent:ComponentName:aut
 - Counters recalculated on load for robustness
 
 ### Non-Destructive Editing
-- All changes undoable (up to 20 steps)
+- Committed document changes undoable (up to 20 steps)
 - Continuous operations coalesced for better UX
-- No accidental data loss
+- Unsaved changes warn before document replacement or closing; there is no autosave
 
 ### Separation of Concerns
 - State management separate from rendering
@@ -1167,24 +1142,9 @@ Use ANM markers to locate functionality. Search for `// @agent:ComponentName:aut
 - User responsible for maintaining `/media` folder alongside mockup files
 
 **Development Mode Media Access:**
-- During development with Vite dev server (localhost:5174), client media folders outside the project root can be accessed via `vite.config.js`
-- The `server.fs.allow` array in `vite.config.js` specifies additional directories the dev server can serve
-- **Important:** This configuration is specific to THIS Vite instance only and does not affect other Vite projects
-- Example configuration:
-  ```javascript
-  export default {
-    server: {
-      fs: {
-        allow: [
-          '.',  // Current project directory
-          'D:/Datafiles5/_Projects and Ideas/_Active 2024/integrate counselling/Media'
-        ]
-      }
-    }
-  }
-  ```
-- When deployed to Firebase or other hosting, media paths should be relative to the deployment root (e.g., `/media/` or `/client-media/`)
-- See `vite.config.js` for current development media path configuration
+- Set `QUICKBOX_MEDIA_ROOT` to one exact external media directory before `npm run dev`, then enter the same path with Set Media Folder. `/@fs/` requests are permitted only inside that directory.
+- The optional Vite configuration uses the same opt-in environment variable and binds to localhost.
+- Firebase hosting uses `public/` for the existing client previews. It does not deploy the root editor. Never change the hosting root to the repository root, which contains private configuration and project documents.
 
 ---
 
@@ -1196,7 +1156,7 @@ When adding new features, consider:
 2. **Rendering:** Extend `renderRegion()` or create new render function
 3. **Event Handling:** Add listener to canvas or toolbar
 4. **File Format:** Update version and add fields to save/load
-5. **Undo/Redo:** Call `pushHistory()` after state mutations
+5. **Undo/Redo:** Call `pushHistory()` immediately before committed state mutations
 6. **UI:** Add buttons to toolbar or panels as needed
 
 ---
@@ -1255,3 +1215,13 @@ When adding new features, consider:
 ---
 
 **For user-facing documentation, see [README.md](README.md)**
+
+## Reliability and Content Boundary (v1.3.1)
+
+Open parses and normalizes JSON before replacing state; malformed input preserves the current document. Limits are 20 MB per import, 200 pages, 10,000 boxes/items, and menu depth 10. Page and box IDs are unique; menu and accordion item IDs are unique within their box. Link targets must exist. Removing an element prunes dangling references in the same undo action.
+
+Text/button content permits basic rich formatting, removes active tags and event/URL attributes, and validates the retained CSS declarations. Menu labels and accordion answers are plain text. Image references are relative paths under the media root, with traversal and active URL schemes rejected. Export escapes labels and attributes and carries validated rich content.
+
+`themes.variables` stores applied color variables in the document, keeping custom palettes portable. Browser palette management uses localStorage for custom definitions and the manifest; JSON palette downloads support distribution. Applied palette edits commit undo actions.
+
+The exported runtime uses `linkTo.target` for page and anchor links, scopes repeated shared elements to their page, measures expanded accordion contents, and grows containing regions. Images that cannot be embedded are listed before the user chooses whether to export placeholders. Fonts remain optional online resources.

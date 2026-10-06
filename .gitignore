@@ -20,3 +20,10 @@ Thumbs.db
 # Temporary files
 *.tmp
 .env
+
+# Local runtime caches
+node_modules/
+.vite/
+.firebase/
+.npm-cache/
+checks/output/
