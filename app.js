@@ -1,6 +1,6 @@
 // QuickBox - Wireframe Mockup Tool
 // Version
-const APP_VERSION = "1.3.1";
+const APP_VERSION = "1.4.1";
 
 // @agent:AppConfig:authority
 // Configurable Constants
@@ -803,6 +803,7 @@ addImageBtn.addEventListener('click', () => addBox('image'));
 addMenuBtn.addEventListener('click', () => addBox('menu'));
 addButtonBtn.addEventListener('click', () => addBox('button'));
 addAccordionBtn.addEventListener('click', () => addBox('accordion'));
+document.getElementById('addTableBtn').addEventListener('click', () => addBox('table'));
 deleteBtn.addEventListener('click', deleteSelectedBox);
 fontSelect.addEventListener('change', updateFont);
 fontSizeSelect.addEventListener('change', updateFontSize);
@@ -1322,6 +1323,7 @@ function addBox(type) {
   else if (type === 'menu') boxName = `Menu ${state.boxCounter}`;
   else if (type === 'button') boxName = `Button ${state.boxCounter}`;
   else if (type === 'accordion') boxName = `Accordion ${state.boxCounter}`;
+  else if (type === 'table') boxName = `Table ${state.boxCounter}`;
 
   // Calculate position based on number of boxes on current page (not boxCounter)
   // This keeps new boxes visible on the canvas
@@ -1344,6 +1346,11 @@ function addBox(type) {
     fontFamily: "'Architects Daughter', cursive",
     linkTo: null
   };
+
+  if (type === 'table') {
+    box.width = 450;
+    box.cells = Array.from({length: 3}, () => ['', '', '']);
+  }
 
   // Menu-specific properties
   if (type === 'menu') {
@@ -1427,6 +1434,7 @@ function renderBox(box, region = 'main') {
   if (box.type === 'menu') boxEl.classList.add('menu-box');
   if (box.type === 'button') boxEl.classList.add('button-box');
   if (box.type === 'accordion') boxEl.classList.add('accordion-box');
+  if (box.type === 'table') boxEl.classList.add('table-box');
   boxEl.id = box.id;
   boxEl.style.left = box.x + 'px';
   boxEl.style.top = box.y + 'px';
@@ -1468,7 +1476,9 @@ function renderBox(box, region = 'main') {
   const content = document.createElement('div');
   content.className = 'box-content';
 
-  if (box.type === 'text') {
+  if (box.type === 'table') {
+    renderTableContent(content, box, boxEl);
+  } else if (box.type === 'text') {
     content.contentEditable = state.currentMode === 'design' ? 'true' : 'false';
     content.innerHTML = QuickBoxDocument.richHTML(box.content);
     content.style.fontSize = box.fontSize + 'px';
@@ -1618,10 +1628,10 @@ function renderBox(box, region = 'main') {
   }
 
   // @agent:AccordionManagement:extension
-  // Resize handles - accordion boxes only get horizontal handles (auto-height)
+  // Content-height boxes only get horizontal resize handles.
   let handles = ['nw', 'n', 'ne', 'w', 'e', 'sw', 's', 'se'];
-  if (box.type === 'accordion') {
-    // Only horizontal resize for accordion boxes (width only)
+  if (box.type === 'accordion' || box.type === 'table') {
+    // Accordions and tables derive height from their content.
     handles = ['w', 'e'];
   }
   handles.forEach(dir => {
@@ -1685,6 +1695,10 @@ function renderBox(box, region = 'main') {
         if (box.linkTo) {
           // DEBUG - can be removed later
           console.log('Navigation triggered in navigate mode:', box.id, box.linkTo);
+    // The second press belongs to a double-click, and editable text owns
+    // its own selection gestures. Neither should initiate a box drag.
+    if (e.detail > 1 || e.target.closest('[contenteditable="true"], [contenteditable="plaintext-only"], .table-cell, .table-controls')) return;
+
           handleLinkClick(box.linkTo);
         } else if (box.type === 'button') {
           // DEBUG - can be removed later
@@ -1771,9 +1785,233 @@ function renderMenuContent(content, box) {
     const menuItemContainer = document.createElement('div');
     menuItemContainer.className = 'menu-item-container';
     menuItemContainer.style.position = 'relative';
+  if (box.type === 'table') updateTableHeight(box, boxEl);
     menuItemContainer.style.zIndex = '5';
 
     const menuItem = document.createElement('div');
+// @agent:TableManagement:authority
+// Cell coordinates are transient UI state; cells and relative column widths are saved.
+function tableColumnWidths(box) {
+  return box.columnWidths || Array(box.cells[0].length).fill(1);
+}
+
+function applyTableColumnWidths(box, boxEl) {
+  const widths = tableColumnWidths(box);
+  const total = widths.reduce((sum, width) => sum + width, 0);
+  boxEl.querySelectorAll('.qb-table col').forEach((col, index) => {
+    col.style.width = (widths[index] / total * 100) + '%';
+  });
+  updateTableHeight(box, boxEl);
+  updateCanvasHeight();
+}
+
+// @agent:TableColumnResize:authority
+// Move an internal border by redistributing width between its two neighbors.
+function startTableColumnResize(event, box, boxEl, column) {
+  if (event.button !== 0 || state.currentMode !== 'design') return;
+  event.preventDefault();
+  event.stopPropagation();
+  document.activeElement?.blur();
+  selectBox(box);
+  const startX = event.clientX;
+  const original = box.columnWidths?.slice();
+  const widths = tableColumnWidths(box).slice();
+  const total = widths.reduce((sum, width) => sum + width, 0);
+  const tableWidth = boxEl.querySelector('.qb-table').getBoundingClientRect().width;
+  if (!tableWidth) return;
+  const pair = widths[column] + widths[column + 1];
+  const minimum = Math.min(32 / tableWidth * total, pair / 2);
+  beginContinuous('table-column-resize');
+  document.body.classList.add('resizing-table-column');
+  function move(e) {
+    const delta = (e.clientX - startX) / tableWidth * total;
+    if (delta === 0) {
+      if (original) box.columnWidths = original.slice();
+      else delete box.columnWidths;
+    } else {
+      box.columnWidths = widths.slice();
+      box.columnWidths[column] = Math.max(minimum, Math.min(pair - minimum, widths[column] + delta));
+      box.columnWidths[column + 1] = pair - box.columnWidths[column];
+    }
+    applyTableColumnWidths(box, boxEl);
+  }
+  function finish() {
+    document.removeEventListener('mousemove', move);
+    document.removeEventListener('mouseup', finish);
+    window.removeEventListener('blur', finish);
+    document.body.classList.remove('resizing-table-column');
+    pushHistory('continuous-end');
+  }
+  document.addEventListener('mousemove', move);
+  document.addEventListener('mouseup', finish);
+  window.addEventListener('blur', finish);
+}
+
+function updateTableHeight(box, boxEl = document.getElementById(box.id)) {
+  if (!boxEl) return;
+  const table = boxEl.querySelector('.qb-table');
+  if (!table) return;
+  const measured = table.getBoundingClientRect().height;
+  box.height = Math.ceil(measured || box.cells.length * 38) + 6;
+  boxEl.style.height = box.height + 'px';
+  const contentLeft = boxEl.querySelector('.table-content').getBoundingClientRect().left;
+  const firstRow = table.rows[0];
+  boxEl.querySelectorAll('.table-column-resize').forEach((handle, index) => {
+    handle.style.left = (firstRow.cells[index].getBoundingClientRect().right - contentLeft) + 'px';
+  });
+}
+
+function tableHTML(box) {
+  const widths = tableColumnWidths(box);
+  const total = widths.reduce((sum, width) => sum + width, 0);
+  const columns = widths.map(width => `<col style="width:${width / total * 100}%">`).join('');
+  return `<table class="qb-table" aria-label="${QuickBoxDocument.escapeHTML(box.name)}"><colgroup>${columns}</colgroup><tbody>${box.cells.map(row =>
+    `<tr>${row.map(cell => `<td>${QuickBoxDocument.escapeHTML(cell)}</td>`).join('')}</tr>`
+  ).join('')}</tbody></table>`;
+}
+
+function renderTableContent(content, box, boxEl) {
+  content.classList.add('table-content');
+  content.style.fontSize = box.fontSize + 'px';
+  content.innerHTML = tableHTML(box);
+  if (state.currentMode !== 'design') return;
+
+  for (let column = 0; column < box.cells[0].length - 1; column++) {
+    const handle = document.createElement('div');
+    handle.className = 'table-column-resize';
+    handle.title = `Resize columns ${column + 1} and ${column + 2}`;
+    handle.setAttribute('aria-label', handle.title);
+    handle.addEventListener('mousedown', event => startTableColumnResize(event, box, boxEl, column));
+    handle.addEventListener('click', event => event.stopPropagation());
+    handle.addEventListener('dblclick', event => event.stopPropagation());
+    content.appendChild(handle);
+  }
+
+  let activeRow = 0, activeColumn = 0;
+  const controls = document.createElement('div');
+  controls.className = 'table-controls';
+  controls.setAttribute('role', 'toolbar');
+  controls.setAttribute('aria-label', 'Table rows and columns');
+  const status = document.createElement('span');
+  status.className = 'table-cell-status';
+  controls.appendChild(status);
+  boxEl.appendChild(controls);
+
+  const drag = document.createElement('button');
+  drag.type = 'button';
+  drag.className = 'table-drag-handle';
+  drag.textContent = '↕';
+  drag.title = 'Drag Table';
+  drag.setAttribute('aria-label', 'Drag Table');
+  drag.addEventListener('mousedown', event => {
+    if (event.button !== 0) return;
+    event.stopPropagation();
+    document.activeElement?.blur();
+    selectBox(box);
+    startDrag(event, box);
+  });
+  boxEl.appendChild(drag);
+
+  const cells = () => [...content.querySelectorAll('td')];
+  function selectCell(row, column) {
+    activeRow = row; activeColumn = column;
+    selectBox(box);
+    cells().forEach(cell => cell.classList.toggle('active-cell', Number(cell.dataset.row) === row && Number(cell.dataset.column) === column));
+    status.textContent = `Row ${row + 1}, column ${column + 1}`;
+    controls.querySelector('[data-action="delete-row"]').disabled = box.cells.length === 1;
+    controls.querySelector('[data-action="delete-column"]').disabled = box.cells[0].length === 1;
+    controls.querySelectorAll('[data-action^="row-"]').forEach(button => { button.disabled = box.cells.length >= 100; });
+    controls.querySelectorAll('[data-action^="column-"]').forEach(button => { button.disabled = box.cells[0].length >= 50; });
+  }
+  function editCell(cell) {
+    cell.contentEditable = 'plaintext-only';
+    cell.focus();
+  }
+  const actions = [
+    ['row-above', 'Add Row Above'], ['row-below', 'Add Row Below'],
+    ['column-left', 'Add Column Left'], ['column-right', 'Add Column Right'],
+    ['delete-row', 'Delete Row'], ['delete-column', 'Delete Column']
+  ];
+  for (const [action, label] of actions) {
+    const button = document.createElement('button');
+    button.type = 'button'; button.textContent = label; button.dataset.action = action;
+    button.addEventListener('click', event => {
+      event.stopPropagation();
+      document.activeElement?.blur();
+      if (action === 'delete-row' && box.cells.length === 1 || action === 'delete-column' && box.cells[0].length === 1) return;
+      if (action.startsWith('row-') && box.cells.length >= 100 || action.startsWith('column-') && box.cells[0].length >= 50) return;
+      pushHistory();
+      if (action.startsWith('row-')) box.cells.splice(activeRow + (action === 'row-below' ? 1 : 0), 0, Array(box.cells[0].length).fill(''));
+      else if (action.startsWith('column-')) {
+        const index = activeColumn + (action === 'column-right' ? 1 : 0);
+        const widths = tableColumnWidths(box).slice();
+        widths[activeColumn] /= 2;
+        widths.splice(index, 0, widths[activeColumn]);
+        box.columnWidths = widths;
+        box.cells.forEach(row => row.splice(index, 0, ''));
+      }
+      else if (action === 'delete-row') box.cells.splice(activeRow, 1);
+      else {
+        const widths = tableColumnWidths(box).slice();
+        const removed = widths.splice(activeColumn, 1)[0];
+        widths[Math.max(0, activeColumn - 1)] += removed;
+        box.columnWidths = widths;
+        box.cells.forEach(row => row.splice(activeColumn, 1));
+      }
+      const row = Math.min(activeRow, box.cells.length - 1), column = Math.min(activeColumn, box.cells[0].length - 1);
+      renderCurrentPage();
+      selectBox(box);
+      document.getElementById(box.id)?.querySelector(`[data-row="${row}"][data-column="${column}"]`)?.focus();
+    });
+    controls.appendChild(button);
+  }
+  cells().forEach((cell, index) => {
+    const row = Math.floor(index / box.cells[0].length), column = index % box.cells[0].length;
+    cell.dataset.row = row; cell.dataset.column = column;
+    cell.classList.add('table-cell');
+    cell.tabIndex = 0;
+    cell.setAttribute('aria-label', `Row ${row + 1}, column ${column + 1}`);
+    let before = null;
+    cell.addEventListener('focus', () => {
+      selectCell(row, column);
+      before = captureSnapshot();
+      cell.contentEditable = 'plaintext-only';
+    });
+    cell.addEventListener('click', event => {
+      if (!event.ctrlKey && !event.metaKey) { selectCell(row, column); editCell(cell); }
+    });
+    cell.addEventListener('dblclick', event => { event.stopPropagation(); editCell(cell); });
+    cell.addEventListener('input', () => {
+      box.cells[row][column] = (cell.innerText ?? cell.textContent).replace(/\r\n/g, '\n').slice(0, 10000);
+      updateTableHeight(box, boxEl);
+      updateCanvasHeight();
+    });
+    cell.addEventListener('blur', () => {
+      if (cell.contentEditable === 'plaintext-only' && findBoxInRegions(box.id)?.box === box && before && documentSignature(before) !== documentSignature()) rememberBefore(before);
+      cell.contentEditable = 'false';
+      cell.textContent = box.cells[row][column];
+      before = null;
+    });
+    cell.addEventListener('keydown', event => {
+      if (cell.contentEditable !== 'plaintext-only' && (event.ctrlKey || event.metaKey) && ['z', 'y', 'c', 'v'].includes(event.key.toLowerCase())) return;
+      // Keep text editing shortcuts within the cell, including Delete and Ctrl+D.
+      event.stopPropagation();
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'd') event.preventDefault();
+      if (event.key === 'Tab') {
+        const next = index + (event.shiftKey ? -1 : 1);
+        if (next >= 0 && next < cells().length) { event.preventDefault(); editCell(cells()[next]); }
+      } else if (event.key === 'Escape') { event.preventDefault(); cell.blur(); }
+      else if (event.key === 'Enter' && cell.contentEditable !== 'plaintext-only') { event.preventDefault(); editCell(cell); }
+    });
+  });
+  cells()[0].classList.add('active-cell');
+  status.textContent = 'Row 1, column 1';
+  controls.querySelector('[data-action="delete-row"]').disabled = box.cells.length === 1;
+  controls.querySelector('[data-action="delete-column"]').disabled = box.cells[0].length === 1;
+  controls.querySelectorAll('[data-action^="row-"]').forEach(button => { button.disabled = box.cells.length >= 100; });
+  controls.querySelectorAll('[data-action^="column-"]').forEach(button => { button.disabled = box.cells[0].length >= 50; });
+}
+
     menuItem.className = 'menu-item';
     menuItem.textContent = item.text;
     
@@ -3442,6 +3680,7 @@ function updateCanvasHeight() {
   // and automatic height adjustments are not applied
 
   // Use state heights for header/footer, calculate boxes position for minimum
+    if (box.type === 'table') updateTableHeight(box, boxEl);
   let headerBoxBottom = 60; // Default min based on box positions
   let mainMaxBottom = 400;  // Default min height for main
   let footerBoxBottom = 60; // Default min based on box positions
@@ -3463,6 +3702,11 @@ function updateCanvasHeight() {
       if (bottom > mainMaxBottom) {
         mainMaxBottom = bottom;
       }
+  if (currentPage) {
+    for (const box of [...state.header.boxes, ...currentPage.boxes, ...state.footer.boxes]) {
+      if (box.type === 'table') updateTableHeight(box);
+    }
+  }
     });
   }
 
@@ -3714,6 +3958,7 @@ function deleteSelectedBox() {
     const region = boxEl.dataset.region;
 
     // Check if deleting from header/footer and not on Page 1
+  else if (box.type === 'table') prefix = 'Table ';
     if ((region === 'header' || region === 'footer') && state.currentPageId !== 'page-1') {
       alert('Header and footer boxes can only be deleted on Page 1');
       return;
@@ -4758,7 +5003,7 @@ function updateFont() {
 // @agent:UndoSystem:extension
 // Update Font Size
 function updateFontSize() {
-  if (!state.selectedBox || (state.selectedBox.type !== 'text' && state.selectedBox.type !== 'button')) return;
+  if (!state.selectedBox || !['text', 'button', 'table'].includes(state.selectedBox.type)) return;
 
   // @agent:UndoSystem:extension
   pushHistory(); // Capture state before font size change
@@ -4776,6 +5021,8 @@ function setProjectMediaFolder() {
   // filesystem path for security reasons. Since we need the real path for Vite's /@fs/
   // prefix, we prompt the user to enter it manually.
   const path = prompt(
+  updateCanvasHeight();
+  if (document.fonts) document.fonts.ready.then(updateCanvasHeight);
     'Enter the full path to your project\'s media folder:\n\n' +
     '1. Copy the path from Windows Explorer address bar\n' +
     '2. Paste it here (backslashes will be auto-converted)\n\n' +
@@ -4795,6 +5042,7 @@ function setProjectMediaFolder() {
 
     console.log('[Media] Project media path set to:', state.projectMediaPath);
 
+  if (state.selectedBox.type === 'table') updateCanvasHeight();
     // Helpful message
     alert('Media folder set!\n\n' +
           'Path: ' + state.projectMediaPath + '\n\n' +
@@ -5330,6 +5578,10 @@ body{margin:0;font-family:${v.globalFont};background:#e8e8e8}
 `;
 }
 
+.table-box{border-width:3px;height:auto!important}
+.table-box .box-content{height:auto;padding:0;overflow:visible}
+.qb-table{width:100%;border-collapse:collapse;table-layout:fixed;white-space:pre-wrap}
+.qb-table td{border:1px solid currentColor;padding:8px;height:38px;box-sizing:border-box;vertical-align:top;overflow-wrap:anywhere}
 function generateMenuHTML_export(box) {
   const escape = QuickBoxDocument.escapeHTML;
   function itemsHTML(items) {
@@ -5353,7 +5605,7 @@ function generateAccordionHTML_export(box) {
 function generateBoxHTML_export(box, imageBase64Map) {
   const escape = QuickBoxDocument.escapeHTML;
   let styles = `left:${box.x}px;top:${box.y}px;width:${box.width}px;height:${box.height}px;z-index:${box.zIndex};`;
-  const classes = {text:'box-text', image:'box-image', menu:'menu-box', button:'button-box', accordion:'accordion-box'};
+  const classes = {text:'box-text', image:'box-image', menu:'menu-box', button:'button-box', accordion:'accordion-box', table:'table-box'};
   let classNames = `box ${classes[box.type]}`;
   if (box.styleOverrides?.fill) styles += `background-color:${box.styleOverrides.fill};`;
   if (box.styleOverrides?.border) styles += `border-color:${box.styleOverrides.border};`;
@@ -5399,6 +5651,8 @@ async function generateExportHTML(imageBase64Map, source = captureSnapshot()) {
     vars[mapping[key] || (match && match[1] + ({fill:'Fill', border:'Border', color:'Color'}[match[2]]))] = value;
   }
   const css = getExportCSS(vars) + getModalCSS();
+  } else if (box.type === 'table') {
+    content = tableHTML(box);
   const regularPages = doc.pages.filter(p => !p.isModal);
   const modals = doc.pages.filter(p => p.isModal).map(modal => `<dialog class="qb-modal" data-modal-id="${escape(modal.id)}" aria-label="${escape(modal.name)}">${modalContentHTML(modal, imageBase64Map)}</dialog>`).join('');
   const nav = regularPages.map((page, i) => `<button class="export-nav-btn${i === 0 ? ' active' : ''}" data-page="${escape(page.id)}">${escape(page.name)}</button>`).join('');

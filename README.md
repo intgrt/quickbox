@@ -1,6 +1,6 @@
 # QuickBox
 
-**Version:** 1.3.1
+**Version:** 1.4.1
 **License:** Apache License 2.0
 **Copyright:** 2025 Intelliscape Interactive Corp.
 
@@ -24,7 +24,7 @@ A lightweight, browser-based wireframe mockup tool for rapid web page prototypin
 
 1. Install Node.js 18 or newer and run `npm run dev` in this folder
 2. Open `http://127.0.0.1:5174` in Chrome or another modern browser
-3. Use toolbar buttons to add elements (Text, Image, Menu, Button, Accordion)
+3. Use toolbar buttons to add elements (Text, Image, Menu, Button, Accordion, Table)
 4. Drag to move, hover edges to resize
 5. Switch between Design mode (✏️ edit) and Navigate mode (🧭 preview)
 6. Use Save/Open buttons to persist mockups as JSON files
@@ -33,7 +33,7 @@ A lightweight, browser-based wireframe mockup tool for rapid web page prototypin
 
 - **Collapsible navigation panel:** Use the arrow above Pages to hide or restore the left panel and give the canvas more space.
 - **Multi-page support** with shared header/footer regions ([details](SYSTEM_DESIGN.md#three-region-canvas-model))
-- **Element types:** Text, Image, Menu, Button, Accordion ([details](SYSTEM_DESIGN.md#box-types))
+- **Element types:** Text, Image, Menu, Button, Accordion, Table ([details](SYSTEM_DESIGN.md#box-types))
 - **Group selection** (Ctrl+Click or rectangle drag) ([details](SYSTEM_DESIGN.md#group-selection))
 - **Copy/Paste** boxes and groups across pages (Ctrl+C / Ctrl+V)
 - **Drag-and-drop** positioning and 8-direction resizing ([details](SYSTEM_DESIGN.md#drag-and-resize))
@@ -83,6 +83,14 @@ A lightweight, browser-based wireframe mockup tool for rapid web page prototypin
 4. Switch to Navigate mode and click the button. Close the popup with **×**, Escape, or its backdrop. Export HTML preserves these interactions.
 
 Modal definitions are saved in JSON. Creating a modal moves selected boxes into it and can be undone. Registration fields remain visual mockups; this does not submit form data.
+
+## Tables
+
+Click **+ Table** to create a 3 × 3 table. Click a cell and start typing to edit plain text. Tab and Shift+Tab move between editable cells; click outside or press Escape to finish. While editing, Enter adds a line break.
+
+Select a cell to show **Add Row Above/Below**, **Add Column Left/Right**, **Delete Row**, and **Delete Column** beneath the table. The blue outline and row/column label identify the target. Tables always retain at least one row and column; limits are 100 rows and 50 columns.
+
+Move the table with its arrow handle and resize its width with the side handles. In Design mode, drag an internal column border to widen one column and narrow its neighbor. The overall table width stays fixed; resizing the whole table preserves the column proportions. Height adjusts to fit the text. Adding a column splits the selected column's width; deleting a column gives its width to a neighbor. Tables use the current text palette and global font; the Size control changes table text size. Cell edits, row/column changes, and column resizing support Undo/Redo. Save/Open, duplication, copy/paste, and HTML export preserve cells and column widths. Navigate mode and exported previews display read-only tables.
 
 ## Keyboard Shortcuts
 

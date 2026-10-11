@@ -470,6 +470,24 @@ label {
   word-wrap: break-word;
 }
 
+/* @agent:TableRendering:authority */
+.box.table-box { border: 3px solid var(--text-border, #333); cursor: default; }
+.table-box .box-content { height: auto; padding: 0; overflow: visible; }
+.qb-modal .table-box { height: auto !important; }
+.qb-table { width: 100%; border-collapse: collapse; table-layout: fixed; white-space: pre-wrap; }
+.qb-table td { border: 1px solid currentColor; padding: 8px; height: 38px; box-sizing: border-box; vertical-align: top; overflow-wrap: anywhere; }
+.table-cell { cursor: text; }
+.table-content { position: relative; }
+.table-column-resize { position: absolute; top: 0; bottom: 0; width: 8px; margin-left: -4px; cursor: col-resize; z-index: 2; }
+.table-column-resize:hover { background: #2386ff55; }
+.resizing-table-column, .resizing-table-column * { cursor: col-resize !important; user-select: none !important; }
+.table-box.selected .table-cell.active-cell { outline: 2px solid #2386ff; outline-offset: -2px; }
+.table-controls { display: none; position: absolute; top: calc(100% + 8px); left: 0; width: 450px; max-width: calc(100vw - 40px); padding: 8px; gap: 5px; flex-wrap: wrap; background: #fff; color: #222; border: 1px solid #555; box-shadow: 2px 2px 5px #0003; z-index: 100; }
+.table-box.selected .table-controls { display: flex; }
+.table-cell-status { flex-basis: 100%; font: 12px Arial, sans-serif; }
+.table-controls button { font: 12px Arial, sans-serif; padding: 5px 7px; cursor: pointer; }
+.table-controls button:disabled { cursor: default; opacity: .45; }
+.table-drag-handle { position: absolute; top: -25px; right: 0; cursor: move; padding: 2px 10px; }
 .box-content[contenteditable="true"]:empty:before {
   content: "Click to edit...";
   color: #999;

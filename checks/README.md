@@ -6,6 +6,10 @@ Run `npm ci`, then `npm run check`. jsdom is a development-only dependency. The 
 
 ## Browser checklist
 
+- Column widths: drag both internal borders in a three-column table, check adjacent widths and fixed overall width, Undo/Redo once per drag, and resize the whole table to verify preserved proportions. Check narrow-column clamping, insertion/deletion, Save/Open, and exported widths. The column resize checks also cover no-op gestures and invalid imported width arrays.
+
+- Tables: create with + Table; edit cells, Tab/Shift+Tab, and type multiline content. Add/delete rows and columns around a selected cell, verify the one-row/column minimum, then Undo/Redo. Drag with the arrow, resize from either side, change font/size, and compare Navigate mode and HTML export. Save/Open must preserve every cell. `checks/table.cjs` covers table mutations, validation, escaping, duplication, and Save/Open using simulated file access.
+
 - Create text, edit it, blur, Undo once, and Redo. Change font and palette, then Undo each.
 - Drag a box, resize it, resize the header/footer, and resize the canvas. Each gesture must undo once. A click without movement must not add history.
 - Edit a menu or accordion: Close discards the draft; Save commits once. Verify Undo/Redo after Save.

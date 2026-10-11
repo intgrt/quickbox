@@ -1,6 +1,6 @@
 # QuickBox System Design & Architecture
-**Version:** 1.3.1
-**Last Updated:** 2026-10-05
+**Version:** 1.4.1
+**Last Updated:** 2026-10-11
 **Code References Last Verified:** 2026-10-05 (markers; use search rather than historical line numbers)
 **Purpose:** Comprehensive system design document for implementing features and understanding codebase structure
 
@@ -177,7 +177,7 @@ Every box (regardless of type) has this structure:
 ```javascript
 {
   id: 'box-1',              // Unique identifier
-  type: 'text'|'image'|'menu'|'button'|'accordion',
+  type: 'text'|'image'|'menu'|'button'|'accordion'|'table',
   name: 'Element 1',        // User-facing label in navigator
   x: 50,                    // Pixel offset from region left
   y: 20,                    // Pixel offset from region top
@@ -474,6 +474,14 @@ Undo History Recorded
 - Only horizontal resize handles (width adjustable, height auto-calculated)
 - Works in both Design and Navigate modes
 - Bottom padding: 8px for visual spacing when all items collapsed
+
+#### Table Box (v1.4)
+- `cells` is a rectangular array of plain-text strings, initially 3 × 3. Validation requires 1–100 rows and 1–50 columns, caps individual cell text at 10,000 characters, and counts cells toward the document element limit.
+- `@agent:TableManagement:authority` renders a semantic HTML table, handles cell editing and structural controls, and measures content height. Cell coordinates and focus are transient; saved box geometry and `cells` use the existing snapshot, duplication, copy/paste, and persistence paths.
+- Clicking or focusing a cell starts plaintext editing; Tab/Shift+Tab navigates editable cells. Blur commits one undo action. Each row/column mutation commits independently. Editing and structural controls never initiate a box drag.
+- Width is resized with the west/east handles; columns wrap text, and height is derived from rendered content. A dedicated handle moves the table. CSS provides selection, borders, and controls; tables inherit the text palette and global font.
+- Optional `columnWidths` (v1.4.1) stores positive relative weights, one per column. Omitted widths mean equal columns for older files. A shared `<colgroup>` converts weights to percentages for editing, Navigate mode, modal previews, and export. `@agent:TableColumnResize:authority` redistributes each adjacent pair during a border drag, holding table width fixed and enforcing a 32px minimum (or half the pair when space is limited). Mouseup/window blur completes one continuous undo action. Column insertion splits the selected width; deletion transfers it to an adjacent survivor.
+- `tableHTML()` escapes every cell and is shared with HTML export and modal previews. Only Design mode creates editing controls. Existing documents require no migration; older QuickBox versions do not recognize the new table type.
 
 ### 6. Linking System
 

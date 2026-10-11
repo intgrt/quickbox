@@ -2,7 +2,7 @@
 // Shared document boundary: validate before replacing state or exporting markup.
 const QuickBoxDocument = (() => {
   const fonts = ["'Architects Daughter', cursive", "'Roboto', sans-serif", "'Comic Sans MS', cursive", 'Arial, sans-serif', "'Courier New', monospace", 'Georgia, serif'];
-  const types = ['text', 'image', 'menu', 'button', 'accordion'];
+  const types = ['text', 'image', 'menu', 'button', 'accordion', 'table'];
   const escapeHTML = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[c]));
   function color(value) {
     if (value == null || value === '') return null;
@@ -96,6 +96,26 @@ const QuickBoxDocument = (() => {
           for (const prop of ['fill', 'border', 'textColor']) {
             const c = color(box.styleOverrides[prop]); if (c) result.styleOverrides[prop] = c;
           }
+        }
+        if (box.type === 'table') {
+          const rows = list(box.cells, 'Table rows');
+          const columns = Array.isArray(rows[0]) ? rows[0].length : 0;
+          if (!rows.length || rows.length > 100 || !columns || columns > 50) throw new Error('Tables require 1–100 rows and 1–50 columns');
+          if (box.columnWidths !== undefined) {
+            if (!Array.isArray(box.columnWidths) || box.columnWidths.length !== columns ||
+                box.columnWidths.some(width => typeof width !== 'number' || !Number.isFinite(width) || width <= 0) ||
+                box.columnWidths.reduce((sum, width) => sum + width, 0) > 1000000) {
+              throw new Error('Table column widths must contain one positive finite number per column');
+            }
+            result.columnWidths = box.columnWidths.slice();
+          }
+          result.cells = rows.map(row => {
+            if (!Array.isArray(row) || row.length !== columns) throw new Error('Table rows must have equal column counts');
+            return row.map(cell => {
+              if (++count > 10000 || typeof cell !== 'string' || cell.length > 10000) throw new Error('Invalid table cell or too many cells');
+              return cell;
+            });
+          });
         }
         if (box.type === 'menu') { result.orientation = box.orientation === 'vertical' ? 'vertical' : 'horizontal'; result.menuItems = menu(box.menuItems ?? []); }
         if (box.type === 'accordion') {
