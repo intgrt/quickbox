@@ -962,6 +962,8 @@ These modify canvas dimensions via drag, not box dimensions.
 
 ### Modals
 
+In Design mode, each modal navigator entry includes a Delete modal button. `deleteModal()` confirms deletion, snapshots history, removes the modal, clears selection, and returns to the first regular page when deleting the active modal. `updateNavigator()` prunes links to the removed modal and its elements in the same undo operation. Undo/redo restores/removes the definition and its references together.
+
 Modal containers reuse page geometry and box editing with `pages[].isModal: true`. They appear in the editor navigator, omit shared regions, and are excluded from exported page navigation. At least one regular page is required. `linkTo: {type: 'modal', target: 'page-N'}` opens the referenced modal. Normalization validates modal targets independently from page and anchor targets, while snapshots preserve modal definitions for save and undo.
 
 Create Modal transfers selected main-content boxes into a new modal, preserving IDs and relative placement with padding. With no selection it creates an empty container. `showModal()` generates a native dialog for editor preview; HTML export renders the same modal content into native dialogs handled by `initializeQuickBoxExport`. Dialogs provide background isolation, keyboard focus containment, and Escape; explicit Close/backdrop actions dismiss them. Modal opening is transient and is not saved. New/Open/Undo and mode changes remove preview dialogs.

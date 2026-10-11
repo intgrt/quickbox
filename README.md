@@ -84,6 +84,8 @@ A lightweight, browser-based wireframe mockup tool for rapid web page prototypin
 
 Modal definitions are saved in JSON. Creating a modal moves selected boxes into it and can be undone. Registration fields remain visual mockups; this does not submit form data.
 
+To remove a modal, use **Delete modal** beside its name in the Pages panel in Design mode, then confirm. This removes the modal, its contents, and links targeting it or its elements. Undo restores them. Deleting the modal you are editing returns you to a regular page.
+
 ## Tables
 
 Click **+ Table** to create a 3 × 3 table. Click a cell and start typing to edit plain text. Tab and Shift+Tab move between editable cells; click outside or press Escape to finish. While editing, Enter adds a line break.

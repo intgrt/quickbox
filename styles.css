@@ -222,6 +222,8 @@ label {
   background: #f0f0f0;
 }
 
+.delete-modal-btn { display: block; margin-top: 4px; font-size: 12px; cursor: pointer; }
+
 .page-item.active, .element-item.selected {
   background: #333;
   color: #fff;

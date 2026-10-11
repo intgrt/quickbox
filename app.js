@@ -1290,6 +1290,7 @@ function setMode(mode) {
 
   // Re-render current page to update contentEditable state
   renderCurrentPage();
+  updatePagesList();
 }
 
 function updateModeUI() {
@@ -1663,6 +1664,10 @@ function renderBox(box, region = 'main') {
       return;
     }
 
+    // The second press belongs to a double-click, and editable text owns
+    // its own selection gestures. Neither should initiate a box drag.
+    if (e.detail > 1 || e.target.closest('[contenteditable="true"], [contenteditable="plaintext-only"], .table-cell, .table-controls')) return;
+
     // Design mode behavior
     // Ignore clicks on special elements (menu items, icons, resize handles)
     const isMenuItemClick = e.target.closest('.menu-item') || e.target.closest('.menu-item-container');
@@ -1695,10 +1700,6 @@ function renderBox(box, region = 'main') {
         if (box.linkTo) {
           // DEBUG - can be removed later
           console.log('Navigation triggered in navigate mode:', box.id, box.linkTo);
-    // The second press belongs to a double-click, and editable text owns
-    // its own selection gestures. Neither should initiate a box drag.
-    if (e.detail > 1 || e.target.closest('[contenteditable="true"], [contenteditable="plaintext-only"], .table-cell, .table-controls')) return;
-
           handleLinkClick(box.linkTo);
         } else if (box.type === 'button') {
           // DEBUG - can be removed later
@@ -1758,37 +1759,10 @@ function renderBox(box, region = 'main') {
     });
   });
 
+  if (box.type === 'table') updateTableHeight(box, boxEl);
   updateCanvasHeight();
 }
 
-// @agent:MenuRendering:authority
-// Render menu content
-function renderMenuContent(content, box) {
-  console.log('[RENDER-MENU-START] renderMenuContent called for box:', box.id, 'on page:', state.currentPageId);
-  console.log('renderMenuContent DEBUG:', {
-    boxId: box.id,
-    currentPageId: state.currentPageId,
-    menuItemsCount: box.menuItems.length,
-    menuItems: box.menuItems.map(item => ({ text: item.text, linkTo: item.linkTo }))
-  });
-
-  content.innerHTML = '';
-  content.className = 'box-content menu-content';
-  content.style.display = 'flex';
-  content.style.flexDirection = box.orientation === 'horizontal' ? 'row' : 'column';
-  content.style.gap = '8px';
-  content.style.alignItems = 'center';
-  content.style.justifyContent = 'space-around';
-
-  box.menuItems.forEach((item, itemIndex) => {
-    console.log(`[renderMenuContent] Processing item #${itemIndex}: "${item.text}", hasLinkTo: ${!!item.linkTo}`);
-    const menuItemContainer = document.createElement('div');
-    menuItemContainer.className = 'menu-item-container';
-    menuItemContainer.style.position = 'relative';
-  if (box.type === 'table') updateTableHeight(box, boxEl);
-    menuItemContainer.style.zIndex = '5';
-
-    const menuItem = document.createElement('div');
 // @agent:TableManagement:authority
 // Cell coordinates are transient UI state; cells and relative column widths are saved.
 function tableColumnWidths(box) {
@@ -2012,6 +1986,33 @@ function renderTableContent(content, box, boxEl) {
   controls.querySelectorAll('[data-action^="column-"]').forEach(button => { button.disabled = box.cells[0].length >= 50; });
 }
 
+// @agent:MenuRendering:authority
+// Render menu content
+function renderMenuContent(content, box) {
+  console.log('[RENDER-MENU-START] renderMenuContent called for box:', box.id, 'on page:', state.currentPageId);
+  console.log('renderMenuContent DEBUG:', {
+    boxId: box.id,
+    currentPageId: state.currentPageId,
+    menuItemsCount: box.menuItems.length,
+    menuItems: box.menuItems.map(item => ({ text: item.text, linkTo: item.linkTo }))
+  });
+
+  content.innerHTML = '';
+  content.className = 'box-content menu-content';
+  content.style.display = 'flex';
+  content.style.flexDirection = box.orientation === 'horizontal' ? 'row' : 'column';
+  content.style.gap = '8px';
+  content.style.alignItems = 'center';
+  content.style.justifyContent = 'space-around';
+
+  box.menuItems.forEach((item, itemIndex) => {
+    console.log(`[renderMenuContent] Processing item #${itemIndex}: "${item.text}", hasLinkTo: ${!!item.linkTo}`);
+    const menuItemContainer = document.createElement('div');
+    menuItemContainer.className = 'menu-item-container';
+    menuItemContainer.style.position = 'relative';
+    menuItemContainer.style.zIndex = '5';
+
+    const menuItem = document.createElement('div');
     menuItem.className = 'menu-item';
     menuItem.textContent = item.text;
     
@@ -3653,6 +3654,7 @@ function startResize(e, box, direction) {
     boxEl.style.height = box.height + 'px';
     boxEl.style.left = box.x + 'px';
     boxEl.style.top = box.y + 'px';
+    if (box.type === 'table') updateTableHeight(box, boxEl);
   }
 
   function onMouseUp() {
@@ -3674,13 +3676,17 @@ function startResize(e, box, direction) {
 // Update Canvas Height
 function updateCanvasHeight() {
   const currentPage = getCurrentPage();
+  if (currentPage) {
+    for (const box of [...state.header.boxes, ...currentPage.boxes, ...state.footer.boxes]) {
+      if (box.type === 'table') updateTableHeight(box);
+    }
+  }
 
   // Note: This function is skipped when canvasSize === 'custom'
   // When users manually resize the canvas via drag, they have full control
   // and automatic height adjustments are not applied
 
   // Use state heights for header/footer, calculate boxes position for minimum
-    if (box.type === 'table') updateTableHeight(box, boxEl);
   let headerBoxBottom = 60; // Default min based on box positions
   let mainMaxBottom = 400;  // Default min height for main
   let footerBoxBottom = 60; // Default min based on box positions
@@ -3702,11 +3708,6 @@ function updateCanvasHeight() {
       if (bottom > mainMaxBottom) {
         mainMaxBottom = bottom;
       }
-  if (currentPage) {
-    for (const box of [...state.header.boxes, ...currentPage.boxes, ...state.footer.boxes]) {
-      if (box.type === 'table') updateTableHeight(box);
-    }
-  }
     });
   }
 
@@ -3768,6 +3769,19 @@ function updatePagesList() {
     item.textContent = `${page.isModal ? '▣ Modal: ' : ''}${page.name} (${page.id})`;
     item.dataset.pageId = page.id;
     item.title = 'Right-click to rename';
+
+    if (page.isModal && state.currentMode === 'design') {
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'delete-modal-btn';
+      remove.textContent = 'Delete modal';
+      remove.setAttribute('aria-label', `Delete modal ${page.name}`);
+      remove.addEventListener('click', event => {
+        event.stopPropagation();
+        deleteModal(page.id);
+      });
+      item.appendChild(remove);
+    }
 
     if (page.id === state.currentPageId) {
       item.classList.add('active');
@@ -3931,6 +3945,7 @@ function editElementName(box) {
   else if (box.type === 'menu') prefix = 'Menu ';
   else if (box.type === 'button') prefix = 'Button ';
   else if (box.type === 'accordion') prefix = 'Accordion ';
+  else if (box.type === 'table') prefix = 'Table ';
 
   const suffix = currentName.startsWith(prefix) ? currentName.substring(prefix.length) : currentName;
 
@@ -3958,7 +3973,6 @@ function deleteSelectedBox() {
     const region = boxEl.dataset.region;
 
     // Check if deleting from header/footer and not on Page 1
-  else if (box.type === 'table') prefix = 'Table ';
     if ((region === 'header' || region === 'footer') && state.currentPageId !== 'page-1') {
       alert('Header and footer boxes can only be deleted on Page 1');
       return;
@@ -4908,6 +4922,22 @@ function handleLinkClick(linkTo) {
 }
 
 // @agent:ModalManagement:authority
+function deleteModal(id) {
+  if (state.currentMode !== 'design') return;
+  const modal = state.pages.find(page => page.id === id && page.isModal);
+  if (!modal || !confirm(`Delete modal "${modal.name}" and all its contents? Links to it will be removed. You can undo this.`)) return;
+  document.activeElement?.blur();
+  pushHistory();
+  state.pages = state.pages.filter(page => page.id !== id);
+  state.selectedBox = null;
+  state.tempGroup = [];
+  if (state.currentPageId === id) state.currentPageId = state.pages.find(page => !page.isModal).id;
+  document.querySelectorAll('dialog.qb-modal').forEach(dialog => dialog.remove());
+  updateNavigator(); // Prune modal and anchor links within the same undo action.
+  renderCurrentPage();
+  updatePageIdentifier();
+}
+
 function createModal() {
   if (state.currentMode !== 'design') return;
   const name = prompt('Modal name:', 'Registration');
@@ -4993,6 +5023,8 @@ function updateFont() {
 
   // Set global CSS variable - affects all box content
   document.documentElement.style.setProperty('--global-font', selectedFont);
+  updateCanvasHeight();
+  if (document.fonts) document.fonts.ready.then(updateCanvasHeight);
 
   // @agent:UndoSystem:extension
 
@@ -5012,6 +5044,7 @@ function updateFontSize() {
   const boxEl = document.getElementById(state.selectedBox.id);
   const content = boxEl.querySelector('.box-content');
   content.style.fontSize = fontSizeSelect.value + 'px';
+  if (state.selectedBox.type === 'table') updateCanvasHeight();
 }
 
 // @agent:ImageManagement:authority
@@ -5021,8 +5054,6 @@ function setProjectMediaFolder() {
   // filesystem path for security reasons. Since we need the real path for Vite's /@fs/
   // prefix, we prompt the user to enter it manually.
   const path = prompt(
-  updateCanvasHeight();
-  if (document.fonts) document.fonts.ready.then(updateCanvasHeight);
     'Enter the full path to your project\'s media folder:\n\n' +
     '1. Copy the path from Windows Explorer address bar\n' +
     '2. Paste it here (backslashes will be auto-converted)\n\n' +
@@ -5042,7 +5073,6 @@ function setProjectMediaFolder() {
 
     console.log('[Media] Project media path set to:', state.projectMediaPath);
 
-  if (state.selectedBox.type === 'table') updateCanvasHeight();
     // Helpful message
     alert('Media folder set!\n\n' +
           'Path: ' + state.projectMediaPath + '\n\n' +
@@ -5550,6 +5580,10 @@ body{margin:0;font-family:${v.globalFont};background:#e8e8e8}
 .box-content{padding:5px;height:100%;width:100%;overflow:auto;font-size:16px;
   font-family:${v.globalFont};box-sizing:border-box;white-space:pre-wrap;word-wrap:break-word}
 .box-image .box-content{padding:0}
+.table-box{border-width:3px;height:auto!important}
+.table-box .box-content{height:auto;padding:0;overflow:visible}
+.qb-table{width:100%;border-collapse:collapse;table-layout:fixed;white-space:pre-wrap}
+.qb-table td{border:1px solid currentColor;padding:8px;height:38px;box-sizing:border-box;vertical-align:top;overflow-wrap:anywhere}
 .box-content img{width:100%;height:100%;display:block;object-fit:cover;object-position:center}
 .box.has-link{cursor:pointer}
 .box.has-link::after{content:'🔗';position:absolute;top:4px;right:4px;font-size:12px;pointer-events:none}
@@ -5578,10 +5612,6 @@ body{margin:0;font-family:${v.globalFont};background:#e8e8e8}
 `;
 }
 
-.table-box{border-width:3px;height:auto!important}
-.table-box .box-content{height:auto;padding:0;overflow:visible}
-.qb-table{width:100%;border-collapse:collapse;table-layout:fixed;white-space:pre-wrap}
-.qb-table td{border:1px solid currentColor;padding:8px;height:38px;box-sizing:border-box;vertical-align:top;overflow-wrap:anywhere}
 function generateMenuHTML_export(box) {
   const escape = QuickBoxDocument.escapeHTML;
   function itemsHTML(items) {
@@ -5623,6 +5653,8 @@ function generateBoxHTML_export(box, imageBase64Map) {
   } else if (box.type === 'menu') {
     contentStyles += 'padding:0;overflow:visible;';
     content = generateMenuHTML_export(box);
+  } else if (box.type === 'table') {
+    content = tableHTML(box);
   } else if (box.type === 'accordion') {
     contentStyles += 'padding:0;overflow:hidden;';
     content = generateAccordionHTML_export(box);
@@ -5651,8 +5683,6 @@ async function generateExportHTML(imageBase64Map, source = captureSnapshot()) {
     vars[mapping[key] || (match && match[1] + ({fill:'Fill', border:'Border', color:'Color'}[match[2]]))] = value;
   }
   const css = getExportCSS(vars) + getModalCSS();
-  } else if (box.type === 'table') {
-    content = tableHTML(box);
   const regularPages = doc.pages.filter(p => !p.isModal);
   const modals = doc.pages.filter(p => p.isModal).map(modal => `<dialog class="qb-modal" data-modal-id="${escape(modal.id)}" aria-label="${escape(modal.name)}">${modalContentHTML(modal, imageBase64Map)}</dialog>`).join('');
   const nav = regularPages.map((page, i) => `<button class="export-nav-btn${i === 0 ? ' active' : ''}" data-page="${escape(page.id)}">${escape(page.name)}</button>`).join('');
